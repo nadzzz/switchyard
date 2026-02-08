@@ -1,0 +1,53 @@
+# ==============================================================================
+# Switchyard — Docker Compose (Production / Self-hosted)
+# ==============================================================================
+# Usage:
+#   cp configs/.env.example .env   # Fill in your secrets
+#   docker compose up -d
+#   curl http://localhost:8081/healthz
+# ==============================================================================
+
+services:
+  switchyard:
+    build:
+      context: .
+      dockerfile: build/Dockerfile
+      args:
+        VERSION: "${VERSION:-latest}"
+    image: switchyard:latest
+    container_name: switchyard
+    restart: unless-stopped
+    ports:
+      - "8080:8080"   # HTTP transport
+      - "8081:8081"   # Health check
+      - "50051:50051" # gRPC transport
+    env_file:
+      - .env
+    volumes:
+      - ./configs/switchyard.yaml:/etc/switchyard/switchyard.yaml:ro
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  # ---------------------------------------------------------------------------
+  # Optional: Mosquitto MQTT broker (enable via profiles)
+  # Usage: docker compose --profile mqtt up -d
+  # ---------------------------------------------------------------------------
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: switchyard-mqtt
+    profiles:
+      - mqtt
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - mosquitto-data:/mosquitto/data
+      - mosquitto-logs:/mosquitto/log
+
+volumes:
+  mosquitto-data:
+  mosquitto-logs:

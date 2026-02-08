@@ -1,0 +1,45 @@
+# Switchyard Configuration
+# Copy this file to ./switchyard.yaml or /etc/switchyard/switchyard.yaml
+# Environment variables can be referenced as ${VAR_NAME}
+
+server:
+  health_port: 8081
+
+transports:
+  grpc:
+    enabled: true
+    port: 50051
+  http:
+    enabled: true
+    port: 8080
+  mqtt:
+    enabled: false
+    broker: "tcp://localhost:1883"
+    topic: "switchyard/#"
+
+interpreter:
+  backend: "openai"                  # "openai" | "local"
+  openai:
+    api_key: "${OPENAI_API_KEY}"
+    transcription_model: "gpt-4o-transcribe"
+    completion_model: "gpt-4o"
+  local:
+    whisper_endpoint: "http://localhost:8000/v1/audio/transcriptions"
+    whisper_type: "openai"           # "openai" (whisper.cpp/faster-whisper) | "asr" (ahmetoner/whisper-asr-webservice)
+    vad_filter: false                # VAD filtering (asr type only)
+    language: ""                     # Default language ISO-639-1 (empty = auto-detect)
+    llm_endpoint: "http://localhost:11434/api/generate"
+
+targets:
+  homeassistant:
+    endpoint: "http://homeassistant.local:8123/api/services"
+    protocol: "http"
+    token: "${HA_TOKEN}"
+  robot:
+    endpoint: "robot.local:50052"
+    protocol: "grpc"
+    token: ""
+
+logging:
+  level: "info"                      # debug | info | warn | error
+  format: "json"                     # json | text
