@@ -39,9 +39,16 @@
             "label": "aspire-run",
             "type": "shell",
             "command": "dotnet",
-            "args": ["run", "--project", "aspire/Switchyard.AppHost"],
+            "args": ["run", "--project", "aspire/Switchyard.AppHost", "--launch-profile", "https"],
             "isBackground": true,
             "problemMatcher": []
+        },
+        {
+            "label": "aspire-build",
+            "type": "shell",
+            "command": "dotnet",
+            "args": ["build", "aspire/Switchyard.AppHost/Switchyard.AppHost.csproj"],
+            "problemMatcher": "$msCompile"
         },
         {
             "label": "docker-build",

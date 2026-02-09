@@ -16,7 +16,7 @@ var builder = DistributedApplication.CreateBuilder(args);
 // ---------------------------------------------------------------------------
 // Switchyard Go daemon
 // ---------------------------------------------------------------------------
-var switchyard = builder.AddGolangApp("switchyard", workingDirectory: "../../")
+var switchyard = builder.AddGolangApp("switchyard", workingDirectory: "../../cmd/switchyard")
     .WithHttpEndpoint(port: 8080, env: "SWITCHYARD_TRANSPORTS_HTTP_PORT", name: "http")
     .WithHttpEndpoint(port: 8081, env: "SWITCHYARD_SERVER_HEALTH_PORT", name: "health")
     .WithEnvironment("SWITCHYARD_TRANSPORTS_GRPC_PORT", "50051")

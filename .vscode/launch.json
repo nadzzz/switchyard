@@ -13,9 +13,22 @@
         },
         {
             "name": "Aspire AppHost",
-            "type": "dotnet",
+            "type": "coreclr",
             "request": "launch",
-            "projectPath": "${workspaceFolder}/aspire/Switchyard.AppHost/Switchyard.AppHost.csproj"
+            "preLaunchTask": "aspire-build",
+            "program": "dotnet",
+            "args": [
+                "run",
+                "--project",
+                "${workspaceFolder}/aspire/Switchyard.AppHost/Switchyard.AppHost.csproj",
+                "--launch-profile",
+                "https"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "env": {
+                "DOTNET_ENVIRONMENT": "Development"
+            }
         }
     ]
 }
