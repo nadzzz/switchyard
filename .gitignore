@@ -26,6 +26,16 @@ go.work.sum
 
 # env file
 .env
+*.env
+!configs/.env.example
+
+# Build output
+bin/
+
+# Aspire / .NET
+aspire/**/bin/
+aspire/**/obj/
+aspire/**/*.user
 
 # Editor/IDE
 # .idea/

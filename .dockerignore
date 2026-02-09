@@ -1,0 +1,31 @@
+# Git
+.git
+.gitignore
+
+# Build artifacts
+bin/
+coverage.*
+*.out
+*.test
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Aspire (.NET) — not needed in Go container
+aspire/
+
+# Documentation (not needed at runtime)
+*.md
+LICENSE
+docs/
+
+# Environment files (secrets must be injected at runtime)
+.env
+*.env
+
+# OS files
+Thumbs.db
+.DS_Store

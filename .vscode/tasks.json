@@ -1,0 +1,54 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build",
+            "type": "shell",
+            "command": "go",
+            "args": ["build", "-o", "bin/switchyard.exe", "./cmd/switchyard"],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": ["$go"]
+        },
+        {
+            "label": "test",
+            "type": "shell",
+            "command": "go",
+            "args": ["test", "-race", "./..."],
+            "group": "test",
+            "problemMatcher": ["$go"]
+        },
+        {
+            "label": "run",
+            "type": "shell",
+            "command": "go",
+            "args": ["run", "./cmd/switchyard"],
+            "isBackground": true,
+            "problemMatcher": []
+        },
+        {
+            "label": "lint",
+            "type": "shell",
+            "command": "golangci-lint",
+            "args": ["run", "./..."],
+            "problemMatcher": ["$go"]
+        },
+        {
+            "label": "aspire-run",
+            "type": "shell",
+            "command": "dotnet",
+            "args": ["run", "--project", "aspire/Switchyard.AppHost"],
+            "isBackground": true,
+            "problemMatcher": []
+        },
+        {
+            "label": "docker-build",
+            "type": "shell",
+            "command": "docker",
+            "args": ["build", "-f", "build/Dockerfile", "-t", "switchyard:latest", "."],
+            "problemMatcher": []
+        }
+    ]
+}

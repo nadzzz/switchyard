@@ -1,0 +1,112 @@
+syntax = "proto3";
+
+package switchyard.v1;
+
+option go_package = "github.com/nadzzz/switchyard/api/proto/v1;switchyardv1";
+
+// SwitchyardService is the primary gRPC interface for the switchyard daemon.
+// Clients (robots, phones, edge devices) send audio or text messages,
+// and receive structured commands in response.
+service SwitchyardService {
+  // Dispatch sends a complete audio or text message for interpretation and routing.
+  rpc Dispatch(DispatchRequest) returns (DispatchResponse);
+
+  // StreamDispatch sends audio as a stream of chunks, useful for real-time capture.
+  rpc StreamDispatch(stream AudioChunk) returns (DispatchResponse);
+}
+
+// DispatchRequest is a complete message sent to switchyard for processing.
+message DispatchRequest {
+  // Unique message identifier (UUID).
+  string id = 1;
+
+  // Source identifies the sender (e.g., "robot-arm-01", "phone-alice").
+  string source = 2;
+
+  // Audio payload (raw bytes). Either audio or text must be provided.
+  bytes audio = 3;
+
+  // MIME type of the audio (e.g., "audio/wav", "audio/ogg").
+  string content_type = 4;
+
+  // Pre-transcribed text input (bypasses transcription if provided).
+  string text = 5;
+
+  // Instruction for how to interpret and route the response.
+  Instruction instruction = 6;
+}
+
+// AudioChunk is a fragment of an audio stream for StreamDispatch.
+message AudioChunk {
+  // Chunk sequence number (0-indexed).
+  uint32 sequence = 1;
+
+  // Audio data for this chunk.
+  bytes data = 2;
+
+  // MIME type of the audio (set on the first chunk).
+  string content_type = 3;
+
+  // Source identifier (set on the first chunk).
+  string source = 4;
+
+  // Instruction (set on the first chunk).
+  Instruction instruction = 5;
+
+  // True if this is the last chunk in the stream.
+  bool final = 6;
+}
+
+// Instruction tells switchyard how to process and route a message.
+message Instruction {
+  // Downstream services that should receive the interpreted commands.
+  repeated Target targets = 1;
+
+  // Desired output format (e.g., "homeassistant", "json", "ros2").
+  string response_format = 2;
+
+  // Additional context for the LLM (e.g., "return motor commands for a 6-axis arm").
+  string prompt = 3;
+}
+
+// Target defines a downstream service.
+message Target {
+  // Human-readable identifier (e.g., "homeassistant", "robot").
+  string service_name = 1;
+
+  // Address to reach this target.
+  string endpoint = 2;
+
+  // Protocol to use ("http", "grpc", "mqtt").
+  string protocol = 3;
+
+  // Optional Go template to transform commands before sending.
+  string format_template = 4;
+}
+
+// DispatchResponse is the result of processing a message.
+message DispatchResponse {
+  // Original message ID.
+  string message_id = 1;
+
+  // Transcribed text (empty if input was text).
+  string transcript = 2;
+
+  // Interpreted commands.
+  repeated Command commands = 3;
+
+  // List of target service names that received the commands.
+  repeated string routed_to = 4;
+
+  // Error message if processing failed.
+  string error = 5;
+}
+
+// Command is a single structured command.
+message Command {
+  // Command verb (e.g., "turn_on", "move_to", "set_temperature").
+  string action = 1;
+
+  // Action-specific parameters as a JSON string.
+  string params_json = 2;
+}

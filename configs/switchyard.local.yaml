@@ -1,0 +1,45 @@
+# Switchyard Configuration — Local Whisper ASR flavor
+#
+# Uses ahmetoner/whisper-asr-webservice running on nadznas:9300
+# and a local LLM (Ollama) for interpretation.
+#
+# Usage:
+#   cp configs/switchyard.local.yaml switchyard.yaml
+#   switchyard
+
+server:
+  health_port: 8081
+
+transports:
+  grpc:
+    enabled: true
+    port: 50051
+  http:
+    enabled: true
+    port: 8080
+  mqtt:
+    enabled: false
+    broker: "tcp://localhost:1883"
+    topic: "switchyard/#"
+
+interpreter:
+  backend: "local"
+  local:
+    # ahmetoner/whisper-asr-webservice — POST /asr endpoint
+    whisper_endpoint: "http://nadznas:9300/asr"
+    whisper_type: "asr"              # "asr" = whisper-asr-webservice, "openai" = OpenAI-compatible
+    vad_filter: true                 # Filter out silence / non-speech segments
+    language: "en"                   # Default language (ISO-639-1); leave empty for auto-detect
+
+    # Ollama for command interpretation
+    llm_endpoint: "http://localhost:11434/api/generate"
+
+targets:
+  homeassistant:
+    endpoint: "http://homeassistant.local:8123/api/services"
+    protocol: "http"
+    token: "${HA_TOKEN}"
+
+logging:
+  level: "debug"
+  format: "text"
