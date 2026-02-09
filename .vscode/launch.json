@@ -12,10 +12,75 @@
             "args": []
         },
         {
-            "name": "Aspire AppHost",
-            "type": "dotnet",
+            "name": "Launch Switchyard (Local)",
+            "type": "go",
             "request": "launch",
-            "projectPath": "${workspaceFolder}/aspire/Switchyard.AppHost/Switchyard.AppHost.csproj"
+            "mode": "auto",
+            "program": "${workspaceFolder}/cmd/switchyard",
+            "cwd": "${workspaceFolder}",
+            "envFile": "${workspaceFolder}/.env",
+            "args": ["--config", "configs/switchyard.local.yaml"]
+        },
+        {
+            "name": "Aspire — Cloud (OpenAI)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "aspire-build",
+            "program": "dotnet",
+            "args": [
+                "run",
+                "--project",
+                "${workspaceFolder}/aspire/Switchyard.AppHost/Switchyard.AppHost.csproj",
+                "--launch-profile",
+                "https"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "env": {
+                "DOTNET_ENVIRONMENT": "Development"
+            }
+        },
+        {
+            "name": "Aspire — Local Machine (Docker)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "aspire-build",
+            "program": "dotnet",
+            "args": [
+                "run",
+                "--project",
+                "${workspaceFolder}/aspire/Switchyard.AppHost/Switchyard.AppHost.csproj",
+                "--launch-profile",
+                "https",
+                "--",
+                "--localmachine"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "env": {
+                "DOTNET_ENVIRONMENT": "Development"
+            }
+        },
+        {
+            "name": "Aspire — Local Network (nadznas)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "aspire-build",
+            "program": "dotnet",
+            "args": [
+                "run",
+                "--project",
+                "${workspaceFolder}/aspire/Switchyard.AppHost/Switchyard.AppHost.csproj",
+                "--launch-profile",
+                "https",
+                "--",
+                "--localnetwork"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "env": {
+                "DOTNET_ENVIRONMENT": "Development"
+            }
         }
     ]
 }

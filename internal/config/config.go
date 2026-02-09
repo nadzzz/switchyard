@@ -87,8 +87,9 @@ type LoggingConfig struct {
 }
 
 // Load reads the configuration from file, environment variables, and defaults.
-// Config file search order: ./switchyard.yaml, ./configs/switchyard.yaml, /etc/switchyard/switchyard.yaml.
-func Load() (*Config, error) {
+// If configFile is non-empty it is used directly; otherwise the standard
+// search order applies: ./switchyard.yaml, ./configs/switchyard.yaml, /etc/switchyard/switchyard.yaml.
+func Load(configFile string) (*Config, error) {
 	v := viper.New()
 
 	// Defaults
@@ -112,11 +113,15 @@ func Load() (*Config, error) {
 	v.SetDefault("logging.format", "json")
 
 	// Config file
-	v.SetConfigName("switchyard")
-	v.SetConfigType("yaml")
-	v.AddConfigPath(".")
-	v.AddConfigPath("./configs")
-	v.AddConfigPath("/etc/switchyard")
+	if configFile != "" {
+		v.SetConfigFile(configFile)
+	} else {
+		v.SetConfigName("switchyard")
+		v.SetConfigType("yaml")
+		v.AddConfigPath(".")
+		v.AddConfigPath("./configs")
+		v.AddConfigPath("/etc/switchyard")
+	}
 
 	// Environment variables: SWITCHYARD_SERVER_HEALTH_PORT, SWITCHYARD_INTERPRETER_BACKEND, etc.
 	v.SetEnvPrefix("SWITCHYARD")

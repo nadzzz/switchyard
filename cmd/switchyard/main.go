@@ -34,6 +34,7 @@ var version = "dev"
 
 func main() {
 	showVersion := flag.Bool("version", false, "print version and exit")
+	configFile := flag.String("config", "", "path to config file (e.g. configs/switchyard.local.yaml)")
 	flag.Parse()
 
 	if *showVersion {
@@ -42,7 +43,7 @@ func main() {
 	}
 
 	// Load configuration.
-	cfg, err := config.Load()
+	cfg, err := config.Load(*configFile)
 	if err != nil {
 		slog.Error("failed to load configuration", "error", err)
 		os.Exit(1)
