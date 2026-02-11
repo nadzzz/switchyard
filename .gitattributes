@@ -1,0 +1,6 @@
+# Ensure config files always use LF (avoids YAML parse errors on Linux).
+*.yaml text eol=lf
+*.yml  text eol=lf
+Dockerfile text eol=lf
+*.sh   text eol=lf
+*.go   text eol=lf

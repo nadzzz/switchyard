@@ -69,6 +69,7 @@ type LocalConfig struct {
 	WhisperEndpoint string `mapstructure:"whisper_endpoint"`
 	WhisperType     string `mapstructure:"whisper_type"` // "openai" (default) or "asr" (ahmetoner/whisper-asr-webservice)
 	LLMEndpoint     string `mapstructure:"llm_endpoint"`
+	LLMModel        string `mapstructure:"llm_model"` // Ollama model name (e.g., "llama3.2:1b")
 	VADFilter       bool   `mapstructure:"vad_filter"`
 	Language        string `mapstructure:"language"` // ISO-639-1 default language (e.g., "en", "fr")
 }
@@ -107,6 +108,7 @@ func Load(configFile string) (*Config, error) {
 	v.SetDefault("interpreter.local.whisper_endpoint", "http://localhost:8000/v1/audio/transcriptions")
 	v.SetDefault("interpreter.local.whisper_type", "openai")
 	v.SetDefault("interpreter.local.llm_endpoint", "http://localhost:11434/api/generate")
+	v.SetDefault("interpreter.local.llm_model", "llama3")
 	v.SetDefault("interpreter.local.vad_filter", false)
 	v.SetDefault("interpreter.local.language", "")
 	v.SetDefault("logging.level", "info")

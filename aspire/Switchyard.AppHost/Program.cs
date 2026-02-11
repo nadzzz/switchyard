@@ -8,8 +8,7 @@
 //
 // Prerequisites:
 //   - .NET 10 SDK + Aspire workload
-//   - Go 1.25+
-//   - Docker Desktop (for localmachine tier)
+//   - Docker Desktop (switchyard runs as a container)
 //   - VS Code with C# Dev Kit and .NET Aspire extensions
 //
 // Usage:
@@ -21,9 +20,17 @@ var builder = DistributedApplication.CreateBuilder(args);
 
 // ---------------------------------------------------------------------------
 // Determine which tier we're running.
+// CLI:    dotnet run -- --localmachine
+// Env:    SWITCHYARD_TIER=localmachine
+// Config: appsettings.json  { "Tier": "localmachine" }
 // ---------------------------------------------------------------------------
-bool useLocalMachine = args.Contains("--localmachine");
-bool useLocalNetwork = args.Contains("--localnetwork");
+var tier = builder.Configuration["Tier"]
+        ?? (args.Contains("--localmachine") ? "localmachine"
+          : args.Contains("--localnetwork") ? "localnetwork"
+          : "cloud");
+
+bool useLocalMachine = tier.Equals("localmachine", StringComparison.OrdinalIgnoreCase);
+bool useLocalNetwork = tier.Equals("localnetwork", StringComparison.OrdinalIgnoreCase);
 
 // ---------------------------------------------------------------------------
 // Aspire-managed containers (localmachine tier only)
@@ -47,10 +54,10 @@ if (useLocalMachine)
 // ---------------------------------------------------------------------------
 // Switchyard Go daemon
 // ---------------------------------------------------------------------------
-var switchyard = builder.AddGolangApp("switchyard", workingDirectory: "../../cmd/switchyard")
-    .WithHttpEndpoint(port: 8080, env: "SWITCHYARD_TRANSPORTS_HTTP_PORT", name: "http")
-    .WithHttpEndpoint(port: 8081, env: "SWITCHYARD_SERVER_HEALTH_PORT", name: "health")
-    .WithEnvironment("SWITCHYARD_TRANSPORTS_GRPC_PORT", "50051")
+var switchyard = builder.AddDockerfile("switchyard", "../../", "build/Dockerfile")
+    .WithHttpEndpoint(port: 8080, targetPort: 8080, name: "http")
+    .WithHttpEndpoint(port: 8081, targetPort: 8081, name: "health")
+    .WithEndpoint(port: 50051, targetPort: 50051, name: "grpc", scheme: "http")
     .WithEnvironment("SWITCHYARD_LOGGING_LEVEL", "debug")
     .WithEnvironment("SWITCHYARD_LOGGING_FORMAT", "text");
 
@@ -63,6 +70,7 @@ if (useLocalMachine)
         .WithEnvironment("SWITCHYARD_INTERPRETER_BACKEND", "local")
         .WithEnvironment("SWITCHYARD_INTERPRETER_LOCAL_WHISPER_TYPE", "openai")
         .WithEnvironment("SWITCHYARD_INTERPRETER_LOCAL_LANGUAGE", "en")
+        .WithEnvironment("SWITCHYARD_INTERPRETER_LOCAL_LLM_MODEL", "llama3.2:1b")
         // Whisper endpoint — resolved from the Aspire-managed container
         .WithEnvironment(ctx =>
         {

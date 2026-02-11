@@ -29,6 +29,7 @@ interpreter:
     vad_filter: false                # VAD filtering (asr type only)
     language: ""                     # Default language ISO-639-1 (empty = auto-detect)
     llm_endpoint: "http://localhost:11434/api/generate"
+    llm_model: "llama3"              # Ollama model name (e.g., "llama3.2:1b")
 
 targets:
   homeassistant:

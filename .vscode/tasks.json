@@ -36,6 +36,13 @@
             "problemMatcher": ["$go"]
         },
         {
+            "label": "aspire-build",
+            "type": "shell",
+            "command": "dotnet",
+            "args": ["build", "aspire/Switchyard.AppHost"],
+            "problemMatcher": ["$msCompile"]
+        },
+        {
             "label": "aspire-run",
             "type": "shell",
             "command": "dotnet",

@@ -23,61 +23,29 @@
         },
         {
             "name": "Aspire — Cloud (OpenAI)",
-            "type": "coreclr",
+            "type": "dotnet",
             "request": "launch",
-            "preLaunchTask": "aspire-build",
-            "program": "dotnet",
-            "args": [
-                "run",
-                "--project",
-                "${workspaceFolder}/aspire/Switchyard.AppHost/Switchyard.AppHost.csproj",
-                "--launch-profile",
-                "https"
-            ],
-            "cwd": "${workspaceFolder}",
-            "console": "integratedTerminal",
+            "projectPath": "${workspaceFolder}/aspire/Switchyard.AppHost/Switchyard.AppHost.csproj",
             "env": {
                 "DOTNET_ENVIRONMENT": "Development"
             }
         },
         {
             "name": "Aspire — Local Machine (Docker)",
-            "type": "coreclr",
+            "type": "dotnet",
             "request": "launch",
-            "preLaunchTask": "aspire-build",
-            "program": "dotnet",
-            "args": [
-                "run",
-                "--project",
-                "${workspaceFolder}/aspire/Switchyard.AppHost/Switchyard.AppHost.csproj",
-                "--launch-profile",
-                "https",
-                "--",
-                "--localmachine"
-            ],
-            "cwd": "${workspaceFolder}",
-            "console": "integratedTerminal",
+            "projectPath": "${workspaceFolder}/aspire/Switchyard.AppHost/Switchyard.AppHost.csproj",
+            "args": ["--localmachine"],
             "env": {
                 "DOTNET_ENVIRONMENT": "Development"
             }
         },
         {
             "name": "Aspire — Local Network (nadznas)",
-            "type": "coreclr",
+            "type": "dotnet",
             "request": "launch",
-            "preLaunchTask": "aspire-build",
-            "program": "dotnet",
-            "args": [
-                "run",
-                "--project",
-                "${workspaceFolder}/aspire/Switchyard.AppHost/Switchyard.AppHost.csproj",
-                "--launch-profile",
-                "https",
-                "--",
-                "--localnetwork"
-            ],
-            "cwd": "${workspaceFolder}",
-            "console": "integratedTerminal",
+            "projectPath": "${workspaceFolder}/aspire/Switchyard.AppHost/Switchyard.AppHost.csproj",
+            "args": ["--localnetwork"],
             "env": {
                 "DOTNET_ENVIRONMENT": "Development"
             }

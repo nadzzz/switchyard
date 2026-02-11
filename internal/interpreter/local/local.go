@@ -27,6 +27,7 @@ type Interpreter struct {
 	whisperEndpoint string
 	whisperType     string // "openai" or "asr"
 	llmEndpoint     string
+	llmModel        string
 	vadFilter       bool
 	defaultLanguage string
 	client          *http.Client
@@ -38,10 +39,15 @@ func New(cfg config.LocalConfig) *Interpreter {
 	if wt == "" {
 		wt = "openai"
 	}
+	model := cfg.LLMModel
+	if model == "" {
+		model = "llama3"
+	}
 	return &Interpreter{
 		whisperEndpoint: cfg.WhisperEndpoint,
 		whisperType:     wt,
 		llmEndpoint:     cfg.LLMEndpoint,
+		llmModel:        model,
 		vadFilter:       cfg.VADFilter,
 		defaultLanguage: cfg.Language,
 		client:          &http.Client{},
@@ -196,7 +202,7 @@ func (i *Interpreter) Interpret(ctx context.Context, text string, instruction me
 
 	// Try OpenAI-compatible chat completions format first (works with Ollama, vLLM, llama.cpp).
 	reqBody := map[string]any{
-		"model": "llama3",
+		"model": i.llmModel,
 		"messages": []map[string]string{
 			{"role": "system", "content": systemPrompt},
 			{"role": "user", "content": text},
@@ -214,7 +220,7 @@ func (i *Interpreter) Interpret(ctx context.Context, text string, instruction me
 	endpoint := i.llmEndpoint
 	if strings.HasSuffix(endpoint, "/api/generate") {
 		reqBody = map[string]any{
-			"model":  "llama3",
+			"model":  i.llmModel,
 			"system": systemPrompt,
 			"prompt": text,
 			"stream": false,
