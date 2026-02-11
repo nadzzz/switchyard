@@ -37,6 +37,14 @@ func (s *Server) SetReady(ready bool) {
 func (s *Server) ListenAndServe(ctx context.Context) error {
 	mux := http.NewServeMux()
 
+	// healthz godoc
+	// @Summary     Liveness probe
+	// @Description Returns 200 when the daemon is alive and ready, 503 otherwise.
+	// @Tags        health
+	// @Produce     json
+	// @Success     200  {object}  map[string]string  "status: ok"
+	// @Failure     503  {object}  map[string]string  "status: not_ready"
+	// @Router      /healthz [get]
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		if !s.ready.Load() {
 			w.WriteHeader(http.StatusServiceUnavailable)
@@ -47,6 +55,14 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	})
 
+	// readyz godoc
+	// @Summary     Readiness probe
+	// @Description Returns 200 when the daemon is ready to accept traffic, 503 otherwise.
+	// @Tags        health
+	// @Produce     json
+	// @Success     200  {object}  map[string]string  "status: ok"
+	// @Failure     503  {object}  map[string]string  "status: not_ready"
+	// @Router      /readyz [get]
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
 		if !s.ready.Load() {
 			w.WriteHeader(http.StatusServiceUnavailable)

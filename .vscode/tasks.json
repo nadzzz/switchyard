@@ -56,6 +56,13 @@
             "command": "docker",
             "args": ["build", "-f", "build/Dockerfile", "-t", "switchyard:latest", "."],
             "problemMatcher": []
+        },
+        {
+            "label": "swagger",
+            "type": "shell",
+            "command": "swag",
+            "args": ["init", "-g", "cmd/switchyard/main.go", "-o", "docs", "--parseDependency", "--parseInternal"],
+            "problemMatcher": []
         }
     ]
 }

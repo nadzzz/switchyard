@@ -54,6 +54,10 @@ proto: ## Generate Go code from protobuf definitions
 		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
 		api/proto/switchyard.proto
 
+swagger: ## Regenerate OpenAPI/Swagger docs (requires swag: go install github.com/swaggo/swag/cmd/swag@latest)
+	swag init -g cmd/switchyard/main.go -o docs --parseDependency --parseInternal
+	@echo "Swagger UI: http://localhost:8080/swagger/index.html"
+
 # ------------------------------------------------------------------------------
 # Aspire (local dev orchestration)
 # ------------------------------------------------------------------------------

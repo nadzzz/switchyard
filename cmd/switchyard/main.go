@@ -5,6 +5,23 @@
 //
 //	switchyard [flags]
 //	switchyard --config /path/to/switchyard.yaml
+
+// @title           Switchyard API
+// @version         0.1.0
+// @description     Voice-first message dispatch daemon — interprets audio/text inputs and routes structured commands to target services.
+// @termsOfService  https://github.com/nadzzz/switchyard
+
+// @contact.name   Switchyard Maintainers
+// @contact.url    https://github.com/nadzzz/switchyard/issues
+
+// @license.name  MIT
+// @license.url   https://github.com/nadzzz/switchyard/blob/main/LICENSE
+
+// @host      localhost:8080
+// @BasePath  /
+
+// @externalDocs.description  Switchyard README
+// @externalDocs.url          https://github.com/nadzzz/switchyard
 package main
 
 import (
@@ -16,6 +33,8 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+
+	_ "github.com/nadzzz/switchyard/docs" // generated swagger docs
 
 	"github.com/nadzzz/switchyard/internal/config"
 	"github.com/nadzzz/switchyard/internal/dispatch"

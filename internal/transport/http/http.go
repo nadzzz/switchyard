@@ -16,6 +16,8 @@ import (
 
 	"github.com/nadzzz/switchyard/internal/message"
 	"github.com/nadzzz/switchyard/internal/transport"
+
+	httpSwagger "github.com/swaggo/http-swagger/v2"
 )
 
 // Transport implements transport.Transport over HTTP and WebSocket.
@@ -47,6 +49,11 @@ func (t *Transport) Listen(ctx context.Context, handler transport.Handler) error
 		http.Error(w, "websocket not yet implemented", http.StatusNotImplemented)
 	})
 
+	// Swagger UI — serves the generated OpenAPI docs.
+	mux.Handle("GET /swagger/", httpSwagger.Handler(
+		httpSwagger.URL("/swagger/doc.json"),
+	))
+
 	t.server = &http.Server{
 		Addr:              fmt.Sprintf(":%d", t.port),
 		Handler:           mux,
@@ -70,6 +77,23 @@ func (t *Transport) Listen(ctx context.Context, handler transport.Handler) error
 }
 
 // handleDispatch processes a POST /dispatch request.
+//
+// @Summary     Dispatch a voice or text command
+// @Description Accepts a JSON message (with optional pre-transcribed text or base64 audio) or raw audio bytes.
+// @Description The message is run through the interpreter pipeline (transcribe → interpret) and the resulting
+// @Description commands are routed to the configured target services.
+// @Tags        dispatch
+// @Accept      json
+// @Accept      audio/wav
+// @Accept      audio/ogg
+// @Produce     json
+// @Param       message  body      message.Message  true  "Dispatch request (JSON). For raw audio, POST the bytes directly with the appropriate Content-Type."
+// @Param       X-Switchyard-Source       header  string  false  "Sender identifier (used with raw audio uploads)"
+// @Param       X-Switchyard-Instruction  header  string  false  "JSON-encoded Instruction (used with raw audio uploads)"
+// @Success     200  {object}  message.DispatchResult  "Interpreted commands"
+// @Failure     400  {string}  string  "Invalid request body or headers"
+// @Failure     500  {string}  string  "Internal processing error"
+// @Router      /dispatch [post]
 func (t *Transport) handleDispatch(w http.ResponseWriter, r *http.Request, handler transport.Handler) {
 	var msg message.Message
 

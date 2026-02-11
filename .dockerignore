@@ -20,7 +20,6 @@ aspire/
 # Documentation (not needed at runtime)
 *.md
 LICENSE
-docs/
 
 # Environment files (secrets must be injected at runtime)
 .env

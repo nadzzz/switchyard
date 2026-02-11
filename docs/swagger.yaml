@@ -1,0 +1,166 @@
+basePath: /
+definitions:
+  github_com_nadzzz_switchyard_internal_message.Command:
+    properties:
+      action:
+        description: Action is the command verb (e.g., "turn_on", "move_to", "set_temperature").
+        type: string
+      params:
+        additionalProperties: {}
+        description: Params holds action-specific parameters.
+        type: object
+      raw:
+        description: Raw is the original JSON as returned by the LLM, preserved for
+          forwarding.
+        items:
+          type: integer
+        type: array
+    type: object
+  github_com_nadzzz_switchyard_internal_message.DispatchResult:
+    properties:
+      commands:
+        description: Commands is the list of interpreted commands.
+        items:
+          $ref: '#/definitions/github_com_nadzzz_switchyard_internal_message.Command'
+        type: array
+      error:
+        description: Error is set if processing failed at any stage.
+        type: string
+      message_id:
+        description: MessageID is the original message ID.
+        type: string
+      routed_to:
+        description: RoutedTo lists the targets that received the commands.
+        items:
+          type: string
+        type: array
+      transcript:
+        description: Transcript is the text produced by audio transcription (empty
+          if text input).
+        type: string
+    type: object
+  github_com_nadzzz_switchyard_internal_message.Instruction:
+    properties:
+      prompt:
+        description: Prompt is additional context for the LLM interpreter (e.g., "return
+          motor commands").
+        type: string
+      response_format:
+        description: ResponseFormat specifies the desired output format (e.g., "homeassistant",
+          "json", "ros2").
+        type: string
+      targets:
+        description: |-
+          Targets lists the services that should receive the interpreted commands.
+          The original sender always receives the response regardless of this list.
+        items:
+          $ref: '#/definitions/github_com_nadzzz_switchyard_internal_message.Target'
+        type: array
+    type: object
+  github_com_nadzzz_switchyard_internal_message.Message:
+    properties:
+      audio:
+        description: Audio is the raw audio payload. Nil if the message is text-only.
+        items:
+          type: integer
+        type: array
+      content_type:
+        description: ContentType is the MIME type of the audio (e.g., "audio/wav",
+          "audio/ogg").
+        type: string
+      id:
+        description: ID is a unique identifier for this message (UUID).
+        type: string
+      instruction:
+        allOf:
+        - $ref: '#/definitions/github_com_nadzzz_switchyard_internal_message.Instruction'
+        description: Instruction tells switchyard how to interpret and route the response.
+      source:
+        description: Source identifies the sender (e.g., "robot-arm-01", "phone-alice").
+        type: string
+      text:
+        description: Text is an optional pre-transcribed text input (bypasses transcription).
+        type: string
+      timestamp:
+        description: Timestamp is when the message was received by switchyard.
+        type: string
+    type: object
+  github_com_nadzzz_switchyard_internal_message.Target:
+    properties:
+      endpoint:
+        description: Endpoint is the address to reach this target (e.g., "http://ha.local:8123/api/services").
+        type: string
+      format_template:
+        description: FormatTemplate is an optional Go template to transform commands
+          before sending.
+        type: string
+      protocol:
+        description: Protocol is the protocol to use ("http", "grpc", "mqtt").
+        type: string
+      service_name:
+        description: ServiceName is a human-readable identifier (e.g., "homeassistant",
+          "robot").
+        type: string
+    type: object
+externalDocs:
+  description: Switchyard README
+  url: https://github.com/nadzzz/switchyard
+host: localhost:8080
+info:
+  contact:
+    name: Switchyard Maintainers
+    url: https://github.com/nadzzz/switchyard/issues
+  description: Voice-first message dispatch daemon — interprets audio/text inputs
+    and routes structured commands to target services.
+  license:
+    name: MIT
+    url: https://github.com/nadzzz/switchyard/blob/main/LICENSE
+  termsOfService: https://github.com/nadzzz/switchyard
+  title: Switchyard API
+  version: 0.1.0
+paths:
+  /dispatch:
+    post:
+      consumes:
+      - application/json
+      - audio/wav
+      - audio/ogg
+      description: |-
+        Accepts a JSON message (with optional pre-transcribed text or base64 audio) or raw audio bytes.
+        The message is run through the interpreter pipeline (transcribe → interpret) and the resulting
+        commands are routed to the configured target services.
+      parameters:
+      - description: Dispatch request (JSON). For raw audio, POST the bytes directly
+          with the appropriate Content-Type.
+        in: body
+        name: message
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_nadzzz_switchyard_internal_message.Message'
+      - description: Sender identifier (used with raw audio uploads)
+        in: header
+        name: X-Switchyard-Source
+        type: string
+      - description: JSON-encoded Instruction (used with raw audio uploads)
+        in: header
+        name: X-Switchyard-Instruction
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Interpreted commands
+          schema:
+            $ref: '#/definitions/github_com_nadzzz_switchyard_internal_message.DispatchResult'
+        "400":
+          description: Invalid request body or headers
+          schema:
+            type: string
+        "500":
+          description: Internal processing error
+          schema:
+            type: string
+      summary: Dispatch a voice or text command
+      tags:
+      - dispatch
+swagger: "2.0"
