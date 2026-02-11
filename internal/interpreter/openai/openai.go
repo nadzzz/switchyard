@@ -48,7 +48,7 @@ func New(cfg config.OpenAIConfig) *Interpreter {
 func (i *Interpreter) Name() string { return "openai" }
 
 // Transcribe sends audio to the OpenAI Transcription API.
-func (i *Interpreter) Transcribe(ctx context.Context, audio []byte, contentType string, opts interpreter.TranscribeOpts) (string, error) {
+func (i *Interpreter) Transcribe(ctx context.Context, audio []byte, contentType string, opts interpreter.TranscribeOpts) (*interpreter.TranscribeResult, error) {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
@@ -56,10 +56,10 @@ func (i *Interpreter) Transcribe(ctx context.Context, audio []byte, contentType 
 	ext := extFromContentType(contentType)
 	part, err := writer.CreateFormFile("file", "audio"+ext)
 	if err != nil {
-		return "", fmt.Errorf("creating form file: %w", err)
+		return nil, fmt.Errorf("creating form file: %w", err)
 	}
 	if _, err := io.Copy(part, bytes.NewReader(audio)); err != nil {
-		return "", fmt.Errorf("writing audio: %w", err)
+		return nil, fmt.Errorf("writing audio: %w", err)
 	}
 
 	model := i.transcriptionModel
@@ -74,41 +74,48 @@ func (i *Interpreter) Transcribe(ctx context.Context, audio []byte, contentType 
 	if opts.Prompt != "" {
 		_ = writer.WriteField("prompt", opts.Prompt)
 	}
-	_ = writer.WriteField("response_format", "json")
+	_ = writer.WriteField("response_format", "verbose_json")
 	writer.Close()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, transcriptionURL, body)
 	if err != nil {
-		return "", fmt.Errorf("creating request: %w", err)
+		return nil, fmt.Errorf("creating request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+i.apiKey)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	resp, err := i.client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("transcription request: %w", err)
+		return nil, fmt.Errorf("transcription request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-		return "", fmt.Errorf("transcription failed (status %d): %s", resp.StatusCode, respBody)
+		return nil, fmt.Errorf("transcription failed (status %d): %s", resp.StatusCode, respBody)
 	}
 
 	var result struct {
-		Text string `json:"text"`
+		Text     string `json:"text"`
+		Language string `json:"language"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", fmt.Errorf("decoding transcription: %w", err)
+		return nil, fmt.Errorf("decoding transcription: %w", err)
 	}
 
-	slog.Debug("transcription complete", "text_length", len(result.Text))
-	return result.Text, nil
+	// OpenAI returns full language names ("english"); normalise to ISO-639-1.
+	lang := normalizeLanguage(result.Language)
+
+	slog.Debug("transcription complete", "text_length", len(result.Text), "language", lang)
+	return &interpreter.TranscribeResult{
+		Text:     result.Text,
+		Language: lang,
+	}, nil
 }
 
 // Interpret sends the transcribed text + instruction to the Chat Completions API
 // and returns structured commands.
-func (i *Interpreter) Interpret(ctx context.Context, text string, instruction message.Instruction) ([]message.Command, error) {
+func (i *Interpreter) Interpret(ctx context.Context, text string, instruction message.Instruction) (*interpreter.InterpretResult, error) {
 	systemPrompt := buildSystemPrompt(instruction)
 
 	reqBody := chatRequest{
@@ -155,13 +162,16 @@ func (i *Interpreter) Interpret(ctx context.Context, text string, instruction me
 
 	// Parse the JSON response into commands.
 	content := chatResp.Choices[0].Message.Content
-	commands, err := parseCommands(content)
+	commands, responseText, err := parseCommands(content)
 	if err != nil {
 		return nil, fmt.Errorf("parsing commands: %w", err)
 	}
 
-	slog.Debug("interpretation complete", "commands", len(commands))
-	return commands, nil
+	slog.Debug("interpretation complete", "commands", len(commands), "has_response", responseText != "")
+	return &interpreter.InterpretResult{
+		Commands:     commands,
+		ResponseText: responseText,
+	}, nil
 }
 
 // Close is a no-op for the OpenAI interpreter.
@@ -205,18 +215,19 @@ func buildSystemPrompt(instr message.Instruction) string {
 		sb.WriteString("Additional context: " + instr.Prompt + "\n")
 	}
 
-	sb.WriteString("\nReturn a JSON object with a \"commands\" array. Each command has:\n")
-	sb.WriteString("- \"action\": the command verb (e.g., \"turn_on\", \"move_to\")\n")
-	sb.WriteString("- \"params\": an object with action-specific parameters\n")
-	sb.WriteString("\nExample: {\"commands\": [{\"action\": \"turn_on\", \"params\": {\"entity\": \"light.living_room\"}}]}\n")
+	sb.WriteString("\nReturn a JSON object with:\n")
+	sb.WriteString("- \"commands\": array of commands, each with \"action\" and \"params\"\n")
+	sb.WriteString("- \"response\": a short confirmation sentence in the SAME language the user spoke\n")
+	sb.WriteString("\nExample: {\"commands\": [{\"action\": \"turn_on\", \"params\": {\"entity\": \"light.living_room\"}}], \"response\": \"Turning on the living room light\"}\n")
 
 	return sb.String()
 }
 
-func parseCommands(content string) ([]message.Command, error) {
-	// Try parsing as {"commands": [...]}
+func parseCommands(content string) ([]message.Command, string, error) {
+	// Try parsing as {"commands": [...], "response": "..."}
 	var wrapper struct {
 		Commands []message.Command `json:"commands"`
+		Response string            `json:"response"`
 	}
 	if err := json.Unmarshal([]byte(content), &wrapper); err == nil && len(wrapper.Commands) > 0 {
 		// Preserve the raw JSON for each command.
@@ -224,7 +235,7 @@ func parseCommands(content string) ([]message.Command, error) {
 			raw, _ := json.Marshal(wrapper.Commands[idx])
 			wrapper.Commands[idx].Raw = raw
 		}
-		return wrapper.Commands, nil
+		return wrapper.Commands, wrapper.Response, nil
 	}
 
 	// Try parsing as a single command.
@@ -232,10 +243,10 @@ func parseCommands(content string) ([]message.Command, error) {
 	if err := json.Unmarshal([]byte(content), &single); err == nil && single.Action != "" {
 		raw, _ := json.Marshal(single)
 		single.Raw = raw
-		return []message.Command{single}, nil
+		return []message.Command{single}, "", nil
 	}
 
-	return nil, fmt.Errorf("could not parse LLM response as commands: %.200s", content)
+	return nil, "", fmt.Errorf("could not parse LLM response as commands: %.200s", content)
 }
 
 func extFromContentType(ct string) string {
@@ -255,4 +266,32 @@ func extFromContentType(ct string) string {
 	default:
 		return ".wav"
 	}
+}
+
+// normalizeLanguage converts full language names (as returned by OpenAI) to ISO-639-1 codes.
+func normalizeLanguage(lang string) string {
+	if len(lang) == 2 {
+		return strings.ToLower(lang)
+	}
+	known := map[string]string{
+		"english":    "en",
+		"french":     "fr",
+		"spanish":    "es",
+		"german":     "de",
+		"italian":    "it",
+		"portuguese": "pt",
+		"dutch":      "nl",
+		"polish":     "pl",
+		"russian":    "ru",
+		"japanese":   "ja",
+		"korean":     "ko",
+		"chinese":    "zh",
+		"arabic":     "ar",
+		"hindi":      "hi",
+		"turkish":    "tr",
+	}
+	if code, ok := known[strings.ToLower(lang)]; ok {
+		return code
+	}
+	return strings.ToLower(lang)
 }

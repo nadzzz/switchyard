@@ -33,6 +33,42 @@ services:
       start_period: 5s
 
   # ---------------------------------------------------------------------------
+  # Optional: Piper TTS — per-language containers (enable via profiles)
+  # Usage: docker compose --profile tts up -d
+  # ---------------------------------------------------------------------------
+  piper-en:
+    image: lscr.io/linuxserver/piper:latest
+    container_name: switchyard-piper-en
+    profiles:
+      - tts
+    restart: unless-stopped
+    ports:
+      - "10200:10200"
+    environment:
+      - PIPER_VOICE=en_US-lessac-medium
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+    volumes:
+      - piper-en-data:/config
+
+  piper-fr:
+    image: lscr.io/linuxserver/piper:latest
+    container_name: switchyard-piper-fr
+    profiles:
+      - tts
+    restart: unless-stopped
+    ports:
+      - "10201:10200"
+    environment:
+      - PIPER_VOICE=fr_FR-siwis-medium
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+    volumes:
+      - piper-fr-data:/config
+
+  # ---------------------------------------------------------------------------
   # Optional: Mosquitto MQTT broker (enable via profiles)
   # Usage: docker compose --profile mqtt up -d
   # ---------------------------------------------------------------------------
@@ -49,5 +85,7 @@ services:
       - mosquitto-logs:/mosquitto/log
 
 volumes:
+  piper-en-data:
+  piper-fr-data:
   mosquitto-data:
   mosquitto-logs:

@@ -83,11 +83,23 @@ type DispatchResult struct {
 	// Transcript is the text produced by audio transcription (empty if text input).
 	Transcript string `json:"transcript,omitempty"`
 
+	// Language is the ISO-639-1 code detected during transcription (e.g., "en", "fr", "es").
+	Language string `json:"language,omitempty"`
+
 	// Commands is the list of interpreted commands.
 	Commands []Command `json:"commands"`
 
 	// RoutedTo lists the targets that received the commands.
 	RoutedTo []string `json:"routed_to"`
+
+	// ResponseText is a natural-language confirmation (in the detected language).
+	ResponseText string `json:"response_text,omitempty"`
+
+	// ResponseAudio is the TTS-synthesized audio of ResponseText (WAV format).
+	ResponseAudio []byte `json:"response_audio,omitempty"`
+
+	// ResponseContentType is the MIME type of ResponseAudio (e.g., "audio/wav").
+	ResponseContentType string `json:"response_content_type,omitempty"`
 
 	// Error is set if processing failed at any stage.
 	Error string `json:"error,omitempty"`

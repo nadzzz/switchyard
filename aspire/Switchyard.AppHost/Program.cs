@@ -37,6 +37,8 @@ bool useLocalNetwork = tier.Equals("localnetwork", StringComparison.OrdinalIgnor
 // ---------------------------------------------------------------------------
 IResourceBuilder<OllamaModelResource>? ollamaModel = null;
 IResourceBuilder<ContainerResource>? whisperContainer = null;
+IResourceBuilder<ContainerResource>? piperEnContainer = null;
+IResourceBuilder<ContainerResource>? piperFrContainer = null;
 
 if (useLocalMachine)
 {
@@ -49,6 +51,23 @@ if (useLocalMachine)
     // whisper.cpp server — quantised GGML model (custom Dockerfile)
     whisperContainer = builder.AddDockerfile("whisper", "../../build/whisper-server")
         .WithHttpEndpoint(targetPort: 8080, name: "whisper");
+
+    // Piper TTS — per-language containers for fast, pre-loaded synthesis.
+    piperEnContainer = builder.AddContainer("piper-en", "lscr.io/linuxserver/piper", "latest")
+        .WithEndpoint(targetPort: 10200, name: "piper-en", scheme: "tcp")
+        .WithVolume("piper-en-data", "/config")
+        .WithEnvironment("PIPER_VOICE", "en_US-lessac-medium")
+        .WithEnvironment("PUID", "1000")
+        .WithEnvironment("PGID", "1000")
+        .WithEnvironment("TZ", "Etc/UTC");
+
+    piperFrContainer = builder.AddContainer("piper-fr", "lscr.io/linuxserver/piper", "latest")
+        .WithEndpoint(targetPort: 10200, name: "piper-fr", scheme: "tcp")
+        .WithVolume("piper-fr-data", "/config")
+        .WithEnvironment("PIPER_VOICE", "fr_FR-siwis-medium")
+        .WithEnvironment("PUID", "1000")
+        .WithEnvironment("PGID", "1000")
+        .WithEnvironment("TZ", "Etc/UTC");
 }
 
 // ---------------------------------------------------------------------------
@@ -86,14 +105,18 @@ var switchyard = builder.AddDockerfile("switchyard", "../../", "build/Dockerfile
 
 if (useLocalMachine)
 {
-    // ── localmachine: whisper.cpp container + Ollama container ───────────
+    // ── localmachine: whisper.cpp container + Ollama container + Piper TTS (en + fr) ──
     switchyard = switchyard
         .WaitFor(ollamaModel!)
         .WaitFor(whisperContainer!)
+        .WaitFor(piperEnContainer!)
+        .WaitFor(piperFrContainer!)
         .WithEnvironment("SWITCHYARD_INTERPRETER_BACKEND", "local")
         .WithEnvironment("SWITCHYARD_INTERPRETER_LOCAL_WHISPER_TYPE", "openai")
         //.WithEnvironment("SWITCHYARD_INTERPRETER_LOCAL_LANGUAGE", "en")
         .WithEnvironment("SWITCHYARD_INTERPRETER_LOCAL_LLM_MODEL", "llama3.2:1b")
+        .WithEnvironment("SWITCHYARD_TTS_ENABLED", "true")
+        .WithEnvironment("SWITCHYARD_TTS_BACKEND", "piper")
         // Whisper endpoint — resolved from the Aspire-managed container
         .WithEnvironment(ctx =>
         {
@@ -107,6 +130,26 @@ if (useLocalMachine)
             var oEp = ollamaModel!.Resource.Parent.PrimaryEndpoint;
             ctx.EnvironmentVariables["SWITCHYARD_INTERPRETER_LOCAL_LLM_ENDPOINT"] =
                 ReferenceExpression.Create($"{oEp}/api/generate");
+        })
+        // Piper TTS endpoints — per-language, resolved from Aspire-managed containers
+        .WithEnvironment(ctx =>
+        {
+            var enEp = piperEnContainer!.GetEndpoint("piper-en");
+            ctx.EnvironmentVariables["SWITCHYARD_TTS_PIPER_ENDPOINTS_EN"] =
+                ReferenceExpression.Create($"{enEp}");
+        })
+        .WithEnvironment(ctx =>
+        {
+            var frEp = piperFrContainer!.GetEndpoint("piper-fr");
+            ctx.EnvironmentVariables["SWITCHYARD_TTS_PIPER_ENDPOINTS_FR"] =
+                ReferenceExpression.Create($"{frEp}");
+        })
+        // Fallback endpoint (English) for unknown languages
+        .WithEnvironment(ctx =>
+        {
+            var enEp = piperEnContainer!.GetEndpoint("piper-en");
+            ctx.EnvironmentVariables["SWITCHYARD_TTS_PIPER_ENDPOINT"] =
+                ReferenceExpression.Create($"{enEp}");
         });
 }
 else if (useLocalNetwork)

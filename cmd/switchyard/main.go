@@ -46,6 +46,8 @@ import (
 	grpctransport "github.com/nadzzz/switchyard/internal/transport/grpc"
 	httptransport "github.com/nadzzz/switchyard/internal/transport/http"
 	mqtttransport "github.com/nadzzz/switchyard/internal/transport/mqtt"
+	"github.com/nadzzz/switchyard/internal/tts"
+	pipertts "github.com/nadzzz/switchyard/internal/tts/piper"
 )
 
 // version is set at build time via ldflags.
@@ -114,8 +116,25 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Initialize TTS (text-to-speech) if enabled.
+	var synthesizer tts.Synthesizer
+	if cfg.TTS.Enabled {
+		switch cfg.TTS.Backend {
+		case "piper":
+			synthesizer = pipertts.New(cfg.TTS.Piper)
+			slog.Info("TTS enabled", "backend", "piper",
+				"endpoint", cfg.TTS.Piper.Endpoint,
+				"language_endpoints", len(cfg.TTS.Piper.Endpoints))
+		default:
+			slog.Warn("unknown TTS backend, TTS disabled", "backend", cfg.TTS.Backend)
+		}
+	}
+	if synthesizer != nil {
+		defer synthesizer.Close()
+	}
+
 	// Create the dispatcher.
-	dispatcher := dispatch.New(interp, transports)
+	dispatcher := dispatch.New(interp, transports, synthesizer)
 
 	// Start health check server.
 	healthServer := health.New(cfg.Server.HealthPort)

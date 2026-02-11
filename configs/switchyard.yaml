@@ -31,6 +31,19 @@ interpreter:
     llm_endpoint: "http://localhost:11434/api/generate"
     llm_model: "llama3"              # Ollama model name (e.g., "llama3.2:1b")
 
+tts:
+  enabled: false                     # Enable text-to-speech synthesis
+  backend: "piper"                   # "piper" (Wyoming protocol)
+  piper:
+    endpoint: "localhost:10200"      # Fallback Wyoming TCP endpoint (all languages)
+    endpoints:                       # Per-language Piper endpoints (takes precedence)
+      en: "localhost:10200"          #   English — dedicated Piper instance
+      fr: "localhost:10201"          #   French  — dedicated Piper instance
+    voices:                          # ISO-639-1 → Piper voice model overrides
+      en: "en_US-lessac-medium"
+      fr: "fr_FR-siwis-medium"
+      es: "es_ES-mls_10246-low"
+
 targets:
   homeassistant:
     endpoint: "http://homeassistant.local:8123/api/services"

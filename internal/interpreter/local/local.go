@@ -61,7 +61,7 @@ func (i *Interpreter) Name() string { return "local" }
 // Supports two flavors:
 //   - "openai": OpenAI-compatible API (whisper.cpp server, faster-whisper)
 //   - "asr":    ahmetoner/whisper-asr-webservice (POST /asr with query params)
-func (i *Interpreter) Transcribe(ctx context.Context, audio []byte, contentType string, opts interpreter.TranscribeOpts) (string, error) {
+func (i *Interpreter) Transcribe(ctx context.Context, audio []byte, contentType string, opts interpreter.TranscribeOpts) (*interpreter.TranscribeResult, error) {
 	switch i.whisperType {
 	case "asr":
 		return i.transcribeASR(ctx, audio, contentType, opts)
@@ -73,17 +73,17 @@ func (i *Interpreter) Transcribe(ctx context.Context, audio []byte, contentType 
 // transcribeASR handles the ahmetoner/whisper-asr-webservice format.
 // API: POST /asr?task=transcribe&language=en&output=json&vad_filter=true
 // Body: multipart/form-data with field "audio_file"
-func (i *Interpreter) transcribeASR(ctx context.Context, audio []byte, contentType string, opts interpreter.TranscribeOpts) (string, error) {
+func (i *Interpreter) transcribeASR(ctx context.Context, audio []byte, contentType string, opts interpreter.TranscribeOpts) (*interpreter.TranscribeResult, error) {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
 	ext := extFromContentType(contentType)
 	part, err := writer.CreateFormFile("audio_file", "audio"+ext)
 	if err != nil {
-		return "", fmt.Errorf("creating form file: %w", err)
+		return nil, fmt.Errorf("creating form file: %w", err)
 	}
 	if _, err := io.Copy(part, bytes.NewReader(audio)); err != nil {
-		return "", fmt.Errorf("writing audio: %w", err)
+		return nil, fmt.Errorf("writing audio: %w", err)
 	}
 	writer.Close()
 
@@ -91,7 +91,7 @@ func (i *Interpreter) transcribeASR(ctx context.Context, audio []byte, contentTy
 	endpoint := i.whisperEndpoint
 	q := make(url.Values)
 	q.Set("task", "transcribe")
-	q.Set("output", "json")
+	q.Set("output", "verbose_json")
 	q.Set("encode", "true")
 
 	lang := opts.Language
@@ -111,7 +111,7 @@ func (i *Interpreter) transcribeASR(ctx context.Context, audio []byte, contentTy
 	reqURL := endpoint + "?" + q.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, body)
 	if err != nil {
-		return "", fmt.Errorf("creating request: %w", err)
+		return nil, fmt.Errorf("creating request: %w", err)
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
@@ -119,39 +119,43 @@ func (i *Interpreter) transcribeASR(ctx context.Context, audio []byte, contentTy
 
 	resp, err := i.client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("asr transcription request: %w", err)
+		return nil, fmt.Errorf("asr transcription request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-		return "", fmt.Errorf("asr transcription failed (status %d): %s", resp.StatusCode, respBody)
+		return nil, fmt.Errorf("asr transcription failed (status %d): %s", resp.StatusCode, respBody)
 	}
 
-	// The ASR service returns {"text": "..."} when output=json.
+	// The ASR service returns {"text": "...", "language": "..."} when output=verbose_json.
 	var result struct {
-		Text string `json:"text"`
+		Text     string `json:"text"`
+		Language string `json:"language"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", fmt.Errorf("decoding asr response: %w", err)
+		return nil, fmt.Errorf("decoding asr response: %w", err)
 	}
 
-	slog.Debug("asr transcription complete", "text_length", len(result.Text))
-	return result.Text, nil
+	slog.Debug("asr transcription complete", "text_length", len(result.Text), "language", result.Language)
+	return &interpreter.TranscribeResult{
+		Text:     result.Text,
+		Language: result.Language,
+	}, nil
 }
 
 // transcribeOpenAI handles OpenAI-compatible whisper endpoints.
-func (i *Interpreter) transcribeOpenAI(ctx context.Context, audio []byte, contentType string, opts interpreter.TranscribeOpts) (string, error) {
+func (i *Interpreter) transcribeOpenAI(ctx context.Context, audio []byte, contentType string, opts interpreter.TranscribeOpts) (*interpreter.TranscribeResult, error) {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
 	ext := extFromContentType(contentType)
 	part, err := writer.CreateFormFile("file", "audio"+ext)
 	if err != nil {
-		return "", fmt.Errorf("creating form file: %w", err)
+		return nil, fmt.Errorf("creating form file: %w", err)
 	}
 	if _, err := io.Copy(part, bytes.NewReader(audio)); err != nil {
-		return "", fmt.Errorf("writing audio: %w", err)
+		return nil, fmt.Errorf("writing audio: %w", err)
 	}
 
 	if opts.Model != "" {
@@ -164,40 +168,44 @@ func (i *Interpreter) transcribeOpenAI(ctx context.Context, audio []byte, conten
 	if lang != "" {
 		_ = writer.WriteField("language", lang)
 	}
-	_ = writer.WriteField("response_format", "json")
+	_ = writer.WriteField("response_format", "verbose_json")
 	writer.Close()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, i.whisperEndpoint, body)
 	if err != nil {
-		return "", fmt.Errorf("creating request: %w", err)
+		return nil, fmt.Errorf("creating request: %w", err)
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	resp, err := i.client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("local transcription request: %w", err)
+		return nil, fmt.Errorf("local transcription request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-		return "", fmt.Errorf("local transcription failed (status %d): %s", resp.StatusCode, respBody)
+		return nil, fmt.Errorf("local transcription failed (status %d): %s", resp.StatusCode, respBody)
 	}
 
 	var result struct {
-		Text string `json:"text"`
+		Text     string `json:"text"`
+		Language string `json:"language"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", fmt.Errorf("decoding transcription: %w", err)
+		return nil, fmt.Errorf("decoding transcription: %w", err)
 	}
 
-	slog.Debug("local transcription complete", "text_length", len(result.Text))
-	return result.Text, nil
+	slog.Debug("local transcription complete", "text_length", len(result.Text), "language", result.Language)
+	return &interpreter.TranscribeResult{
+		Text:     result.Text,
+		Language: result.Language,
+	}, nil
 }
 
 // Interpret sends the transcribed text to the local LLM endpoint.
 // Supports Ollama's /api/generate and OpenAI-compatible /v1/chat/completions.
-func (i *Interpreter) Interpret(ctx context.Context, text string, instruction message.Instruction) ([]message.Command, error) {
+func (i *Interpreter) Interpret(ctx context.Context, text string, instruction message.Instruction) (*interpreter.InterpretResult, error) {
 	systemPrompt := buildSystemPrompt(instruction)
 
 	// Try OpenAI-compatible chat completions format first (works with Ollama, vLLM, llama.cpp).
@@ -257,13 +265,16 @@ func (i *Interpreter) Interpret(ctx context.Context, text string, instruction me
 		return nil, fmt.Errorf("empty response from local LLM")
 	}
 
-	commands, err := parseCommands(content)
+	commands, responseText, err := parseCommands(content)
 	if err != nil {
 		return nil, fmt.Errorf("parsing commands: %w", err)
 	}
 
-	slog.Debug("local interpretation complete", "commands", len(commands))
-	return commands, nil
+	slog.Debug("local interpretation complete", "commands", len(commands), "has_response", responseText != "")
+	return &interpreter.InterpretResult{
+		Commands:     commands,
+		ResponseText: responseText,
+	}, nil
 }
 
 // Close is a no-op for the local interpreter.
@@ -307,30 +318,31 @@ func buildSystemPrompt(instr message.Instruction) string {
 		sb.WriteString("Context: " + instr.Prompt + "\n")
 	}
 
-	sb.WriteString("\nReturn: {\"commands\": [{\"action\": \"...\", \"params\": {...}}]}\n")
+	sb.WriteString("\nReturn: {\"commands\": [{\"action\": \"...\", \"params\": {...}}], \"response\": \"short confirmation in the user's language\"}\n")
 	return sb.String()
 }
 
-func parseCommands(content string) ([]message.Command, error) {
+func parseCommands(content string) ([]message.Command, string, error) {
 	var wrapper struct {
 		Commands []message.Command `json:"commands"`
+		Response string            `json:"response"`
 	}
 	if err := json.Unmarshal([]byte(content), &wrapper); err == nil && len(wrapper.Commands) > 0 {
 		for idx := range wrapper.Commands {
 			raw, _ := json.Marshal(wrapper.Commands[idx])
 			wrapper.Commands[idx].Raw = raw
 		}
-		return wrapper.Commands, nil
+		return wrapper.Commands, wrapper.Response, nil
 	}
 
 	var single message.Command
 	if err := json.Unmarshal([]byte(content), &single); err == nil && single.Action != "" {
 		raw, _ := json.Marshal(single)
 		single.Raw = raw
-		return []message.Command{single}, nil
+		return []message.Command{single}, "", nil
 	}
 
-	return nil, fmt.Errorf("could not parse LLM response: %.200s", content)
+	return nil, "", fmt.Errorf("could not parse LLM response: %.200s", content)
 }
 
 func extFromContentType(ct string) string {

@@ -15,6 +15,7 @@ type Config struct {
 	Server      ServerConfig      `mapstructure:"server"`
 	Transports  TransportsConfig  `mapstructure:"transports"`
 	Interpreter InterpreterConfig `mapstructure:"interpreter"`
+	TTS         TTSConfig         `mapstructure:"tts"`
 	Targets     map[string]Target `mapstructure:"targets"`
 	Logging     LoggingConfig     `mapstructure:"logging"`
 }
@@ -81,6 +82,25 @@ type Target struct {
 	Token    string `mapstructure:"token"`
 }
 
+// TTSConfig selects and configures the text-to-speech backend.
+type TTSConfig struct {
+	Enabled bool        `mapstructure:"enabled"`
+	Backend string      `mapstructure:"backend"` // "piper"
+	Piper   PiperConfig `mapstructure:"piper"`
+}
+
+// PiperConfig holds Piper TTS settings (Wyoming protocol).
+//
+// For a single Piper instance that serves all languages, set Endpoint.
+// For per-language instances (recommended for production), set Endpoints
+// which maps ISO-639-1 codes to individual Wyoming TCP endpoints.
+// If both are set, Endpoints takes precedence and Endpoint is the fallback.
+type PiperConfig struct {
+	Endpoint  string            `mapstructure:"endpoint"`  // Default Wyoming TCP endpoint (host:port)
+	Endpoints map[string]string `mapstructure:"endpoints"` // ISO-639-1 language code -> Wyoming TCP endpoint
+	Voices    map[string]string `mapstructure:"voices"`    // ISO-639-1 language code -> Piper voice model name
+}
+
 // LoggingConfig holds structured logging settings.
 type LoggingConfig struct {
 	Level  string `mapstructure:"level"`  // debug, info, warn, error
@@ -111,6 +131,9 @@ func Load(configFile string) (*Config, error) {
 	v.SetDefault("interpreter.local.llm_model", "llama3")
 	v.SetDefault("interpreter.local.vad_filter", false)
 	v.SetDefault("interpreter.local.language", "")
+	v.SetDefault("tts.enabled", false)
+	v.SetDefault("tts.backend", "piper")
+	v.SetDefault("tts.piper.endpoint", "localhost:10200")
 	v.SetDefault("logging.level", "info")
 	v.SetDefault("logging.format", "json")
 

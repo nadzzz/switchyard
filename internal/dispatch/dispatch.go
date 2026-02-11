@@ -16,16 +16,18 @@ import (
 	"github.com/nadzzz/switchyard/internal/interpreter"
 	"github.com/nadzzz/switchyard/internal/message"
 	"github.com/nadzzz/switchyard/internal/transport"
+	"github.com/nadzzz/switchyard/internal/tts"
 )
 
 // Dispatcher is the central routing engine.
 type Dispatcher struct {
 	interpreter interpreter.Interpreter
 	transports  map[string]transport.Transport
+	synthesizer tts.Synthesizer // nil if TTS is disabled
 }
 
 // New creates a new Dispatcher with the given interpreter and transports.
-func New(interp interpreter.Interpreter, transports []transport.Transport) *Dispatcher {
+func New(interp interpreter.Interpreter, transports []transport.Transport, synthesizer tts.Synthesizer) *Dispatcher {
 	tm := make(map[string]transport.Transport, len(transports))
 	for _, t := range transports {
 		tm[t.Name()] = t
@@ -33,6 +35,7 @@ func New(interp interpreter.Interpreter, transports []transport.Transport) *Disp
 	return &Dispatcher{
 		interpreter: interp,
 		transports:  tm,
+		synthesizer: synthesizer,
 	}
 }
 
@@ -49,10 +52,10 @@ func (d *Dispatcher) Handle(ctx context.Context, msg *message.Message) (*message
 
 	// Step 1: Transcribe audio (if present).
 	var transcript string
+	var detectedLang string
 	if msg.HasAudio() {
 		logger.Debug("transcribing audio", "content_type", msg.ContentType, "bytes", len(msg.Audio))
-		var err error
-		transcript, err = d.interpreter.Transcribe(ctx, msg.Audio, msg.ContentType, interpreter.TranscribeOpts{
+		res, err := d.interpreter.Transcribe(ctx, msg.Audio, msg.ContentType, interpreter.TranscribeOpts{
 			Prompt: msg.Instruction.Prompt,
 		})
 		if err != nil {
@@ -60,8 +63,11 @@ func (d *Dispatcher) Handle(ctx context.Context, msg *message.Message) (*message
 			logger.Error("transcription failed", "error", err)
 			return result, nil
 		}
+		transcript = res.Text
+		detectedLang = res.Language
 		result.Transcript = transcript
-		logger.Info("transcription complete", "text_length", len(transcript))
+		result.Language = detectedLang
+		logger.Info("transcription complete", "text_length", len(transcript), "language", detectedLang)
 	} else if msg.Text != "" {
 		transcript = msg.Text
 		result.Transcript = transcript
@@ -72,16 +78,36 @@ func (d *Dispatcher) Handle(ctx context.Context, msg *message.Message) (*message
 	}
 
 	// Step 2: Interpret transcript into commands.
-	commands, err := d.interpreter.Interpret(ctx, transcript, msg.Instruction)
+	interpResult, err := d.interpreter.Interpret(ctx, transcript, msg.Instruction)
 	if err != nil {
 		result.Error = fmt.Sprintf("interpretation failed: %v", err)
 		logger.Error("interpretation failed", "error", err)
 		return result, nil
 	}
-	result.Commands = commands
-	logger.Info("interpretation complete", "commands", len(commands))
+	result.Commands = interpResult.Commands
+	result.ResponseText = interpResult.ResponseText
+	logger.Info("interpretation complete", "commands", len(interpResult.Commands))
 
-	// Step 3: Route commands to target services.
+	// Step 3: Synthesize a spoken response (if TTS is enabled and we have text).
+	if d.synthesizer != nil && result.ResponseText != "" {
+		lang := detectedLang
+		if lang == "" {
+			lang = "en"
+		}
+		logger.Debug("synthesizing response", "language", lang, "text_length", len(result.ResponseText))
+		synthResult, err := d.synthesizer.Synthesize(ctx, result.ResponseText, tts.SynthesizeOpts{
+			Language: lang,
+		})
+		if err != nil {
+			logger.Warn("TTS synthesis failed, continuing without audio", "error", err)
+		} else {
+			result.ResponseAudio = synthResult.Audio
+			result.ResponseContentType = synthResult.ContentType
+			logger.Info("TTS synthesis complete", "audio_bytes", len(synthResult.Audio))
+		}
+	}
+
+	// Step 4: Route commands to target services.
 	payload, err := json.Marshal(result)
 	if err != nil {
 		result.Error = fmt.Sprintf("marshalling result: %v", err)
