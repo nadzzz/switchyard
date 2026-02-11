@@ -58,6 +58,29 @@ var switchyard = builder.AddDockerfile("switchyard", "../../", "build/Dockerfile
     .WithHttpEndpoint(port: 8080, targetPort: 8080, name: "http")
     .WithHttpEndpoint(port: 8081, targetPort: 8081, name: "health")
     .WithEndpoint(port: 50051, targetPort: 50051, name: "grpc", scheme: "http")
+    .WithUrls(context =>
+    {
+        foreach (var url in context.Urls)
+        {
+            url.DisplayText = url.Endpoint?.EndpointName switch
+            {
+                "http"   => "HTTP API",
+                "health" => "Health",
+                "grpc"   => "gRPC",
+                _        => url.DisplayText
+            };
+        }
+
+        var httpUrl = context.Urls.FirstOrDefault(u => u.Endpoint?.EndpointName == "http");
+        if (httpUrl is not null)
+        {
+            context.Urls.Add(new ResourceUrlAnnotation
+            {
+                Url = $"{httpUrl.Url}/swagger/index.html",
+                DisplayText = "Swagger UI"
+            });
+        }
+    })
     .WithEnvironment("SWITCHYARD_LOGGING_LEVEL", "debug")
     .WithEnvironment("SWITCHYARD_LOGGING_FORMAT", "text");
 
