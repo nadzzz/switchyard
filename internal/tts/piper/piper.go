@@ -303,14 +303,14 @@ func pcmToWAV(pcm []byte, sampleRate, channels, bytesPerSample int) []byte {
 
 	// fmt subchunk
 	buf.WriteString("fmt ")
-	_ = binary.Write(buf, binary.LittleEndian, uint32(16))           // subchunk1 size
-	_ = binary.Write(buf, binary.LittleEndian, uint16(1))            // audio format (PCM)
-	_ = binary.Write(buf, binary.LittleEndian, uint16(channels))     // channels
-	_ = binary.Write(buf, binary.LittleEndian, uint32(sampleRate))   // sample rate
+	_ = binary.Write(buf, binary.LittleEndian, uint32(16))         // subchunk1 size
+	_ = binary.Write(buf, binary.LittleEndian, uint16(1))          // audio format (PCM)
+	_ = binary.Write(buf, binary.LittleEndian, uint16(channels))   // channels
+	_ = binary.Write(buf, binary.LittleEndian, uint32(sampleRate)) // sample rate
 	byteRate := sampleRate * channels * bytesPerSample
-	_ = binary.Write(buf, binary.LittleEndian, uint32(byteRate))     // byte rate
+	_ = binary.Write(buf, binary.LittleEndian, uint32(byteRate)) // byte rate
 	blockAlign := channels * bytesPerSample
-	_ = binary.Write(buf, binary.LittleEndian, uint16(blockAlign))   // block align
+	_ = binary.Write(buf, binary.LittleEndian, uint16(blockAlign))       // block align
 	_ = binary.Write(buf, binary.LittleEndian, uint16(bytesPerSample*8)) // bits per sample
 
 	// data subchunk

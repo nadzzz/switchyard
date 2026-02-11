@@ -182,7 +182,7 @@ func (i *Interpreter) Close() error { return nil }
 type chatRequest struct {
 	Model          string          `json:"model"`
 	Messages       []chatMessage   `json:"messages"`
-	ResponseFormat *responseFormat  `json:"response_format,omitempty"`
+	ResponseFormat *responseFormat `json:"response_format,omitempty"`
 	Temperature    float64         `json:"temperature"`
 }
 
