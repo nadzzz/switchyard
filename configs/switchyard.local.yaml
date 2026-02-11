@@ -29,7 +29,7 @@ interpreter:
     whisper_endpoint: "http://nadznas:9300/asr"
     whisper_type: "asr"              # "asr" = whisper-asr-webservice, "openai" = OpenAI-compatible
     vad_filter: true                 # Filter out silence / non-speech segments
-    language: "en"                   # Default language (ISO-639-1); leave empty for auto-detect
+    language: ""                     # Default language (ISO-639-1); leave empty for auto-detect. use en for better performance if you know the language in advance.
 
     # Ollama for command interpretation
     llm_endpoint: "http://localhost:11434/api/generate"

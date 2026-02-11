@@ -92,7 +92,7 @@ if (useLocalMachine)
         .WaitFor(whisperContainer!)
         .WithEnvironment("SWITCHYARD_INTERPRETER_BACKEND", "local")
         .WithEnvironment("SWITCHYARD_INTERPRETER_LOCAL_WHISPER_TYPE", "openai")
-        .WithEnvironment("SWITCHYARD_INTERPRETER_LOCAL_LANGUAGE", "en")
+        //.WithEnvironment("SWITCHYARD_INTERPRETER_LOCAL_LANGUAGE", "en")
         .WithEnvironment("SWITCHYARD_INTERPRETER_LOCAL_LLM_MODEL", "llama3.2:1b")
         // Whisper endpoint — resolved from the Aspire-managed container
         .WithEnvironment(ctx =>
@@ -117,7 +117,6 @@ else if (useLocalNetwork)
         .WithEnvironment("SWITCHYARD_INTERPRETER_LOCAL_WHISPER_ENDPOINT", "http://nadznas:9300/asr")
         .WithEnvironment("SWITCHYARD_INTERPRETER_LOCAL_WHISPER_TYPE", "asr")
         .WithEnvironment("SWITCHYARD_INTERPRETER_LOCAL_VAD_FILTER", "true")
-        .WithEnvironment("SWITCHYARD_INTERPRETER_LOCAL_LANGUAGE", "en")
         .WithEnvironment("SWITCHYARD_INTERPRETER_LOCAL_LLM_ENDPOINT", "http://nadznas:11434/api/generate");
 }
 else
