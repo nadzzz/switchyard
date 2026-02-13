@@ -63,8 +63,6 @@ public sealed class HttpTransportOptions
 public sealed class MqttTransportOptions
 {
     public bool Enabled { get; set; }
-
-    [Url]
     public string Broker { get; set; } = "tcp://localhost:1883";
     public string Topic { get; set; } = "switchyard/#";
 }

@@ -1,6 +1,7 @@
 {
     "chat.tools.terminal.autoApprove": {
         "go": true,
-        "dotnet build": true
+        "dotnet build": true,
+        "dotnet run": true
     }
 }

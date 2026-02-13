@@ -139,6 +139,7 @@ public static class ServiceCollectionExtensions
     /// <summary>Registers ASP.NET Core health checks for readiness probes.</summary>
     public static IServiceCollection AddSwitchyardHealthChecks(this IServiceCollection services)
     {
+        services.AddSingleton<SwitchyardHealthCheck>();
         services.AddHealthChecks()
             .AddCheck<SwitchyardHealthCheck>("switchyard", tags: ["ready"]);
 
