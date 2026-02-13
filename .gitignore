@@ -37,6 +37,11 @@ aspire/**/bin/
 aspire/**/obj/
 aspire/**/*.user
 
+# React SPA (TestClient)
+aspire/Switchyard.TestClient/clientapp/node_modules/
+aspire/Switchyard.TestClient/clientapp/dist/
+aspire/Switchyard.TestClient/wwwroot/
+
 # Editor/IDE
 # .idea/
 # .vscode/

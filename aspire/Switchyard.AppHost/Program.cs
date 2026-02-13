@@ -181,6 +181,21 @@ if (builder.Configuration["HA_TOKEN"] is string haToken && haToken.Length > 0)
 }
 
 // ---------------------------------------------------------------------------
+// Test Client — React + ASP.NET Core BFF for interactive testing
+// ---------------------------------------------------------------------------
+var testClient = builder.AddProject<Projects.Switchyard_TestClient>("testclient")
+    .WithExternalHttpEndpoints()
+    .WithEnvironment(ctx =>
+    {
+        var httpEp = switchyard.GetEndpoint("http");
+        var grpcEp = switchyard.GetEndpoint("grpc");
+        ctx.EnvironmentVariables["services__switchyard__http__0"] =
+            ReferenceExpression.Create($"{httpEp}");
+        ctx.EnvironmentVariables["services__switchyard__grpc__0"] =
+            ReferenceExpression.Create($"{grpcEp}");
+    });
+
+// ---------------------------------------------------------------------------
 // Future: add dependent services here
 // ---------------------------------------------------------------------------
 // var redis = builder.AddRedis("cache");

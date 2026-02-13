@@ -15,4 +15,8 @@
     <PackageReference Include="CommunityToolkit.Aspire.Hosting.Ollama" Version="13.1.1" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Switchyard.TestClient\Switchyard.TestClient.csproj" />
+  </ItemGroup>
+
 </Project>

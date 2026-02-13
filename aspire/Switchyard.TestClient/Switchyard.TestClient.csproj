@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Switchyard.TestClient</RootNamespace>
+    <SpaRoot>clientapp\</SpaRoot>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Grpc.Net.Client" Version="2.71.0" />
+    <PackageReference Include="Google.Protobuf" Version="3.30.2" />
+    <PackageReference Include="Grpc.Tools" Version="2.71.0" PrivateAssets="All" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Protobuf Include="..\..\api\proto\switchyard.proto" GrpcServices="Client" ProtoRoot="..\..\api\proto" />
+  </ItemGroup>
+
+  <!-- Exclude SPA source from .NET content items -->
+  <ItemGroup>
+    <Content Remove="$(SpaRoot)**" />
+    <None Remove="$(SpaRoot)**" />
+    <None Include="$(SpaRoot)**" Exclude="$(SpaRoot)node_modules\**" />
+  </ItemGroup>
+
+  <!-- Build the React SPA and copy to wwwroot on every build -->
+  <Target Name="BuildSpa" BeforeTargets="Build" Condition="!Exists('$(SpaRoot)node_modules')">
+    <Exec WorkingDirectory="$(SpaRoot)" Command="npm install" />
+  </Target>
+
+  <Target Name="BuildSpaAssets" AfterTargets="Build" Condition="!Exists('wwwroot\index.html') OR '$(BuildingSpa)' == 'true'">
+    <Exec WorkingDirectory="$(SpaRoot)" Command="npm run build" />
+    <ItemGroup>
+      <SpaDistFiles Include="$(SpaRoot)dist\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(SpaDistFiles)"
+          DestinationFiles="@(SpaDistFiles->'wwwroot\%(RecursiveDir)%(Filename)%(Extension)')" />
+  </Target>
+
+</Project>
