@@ -2,160 +2,80 @@
 // Port of the Go switchyard daemon to ASP.NET Core.
 // Interprets audio/text inputs and routes structured commands to target services.
 
-using System.Text.Json;
+using Microsoft.Extensions.Options;
 using Switchyard.Config;
-using Switchyard.Dispatch;
-using Switchyard.Interpreter;
+using Switchyard.DependencyInjection;
+using Switchyard.Endpoints;
+using Switchyard.Health;
 using Switchyard.Models;
-using Switchyard.Transport;
-using Switchyard.Tts;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // ---------------------------------------------------------------------------
-// Configuration — bind from environment variables (SWITCHYARD_*) and appsettings.
-// Environment variable mapping: SWITCHYARD_INTERPRETER_BACKEND → Switchyard:Interpreter:Backend
+// Configuration — Options pattern with validation.
 // ---------------------------------------------------------------------------
 builder.Configuration.AddEnvironmentVariables("SWITCHYARD_");
-
-// Map flat SWITCHYARD_ env vars to the hierarchical config model.
-// The standard ASP.NET approach uses __ (double underscore) as separator,
-// but the Go daemon uses _ (single underscore). We map them manually.
 MapEnvToConfig(builder.Configuration);
 
-var cfg = new SwitchyardConfig();
-builder.Configuration.GetSection("Switchyard").Bind(cfg);
+builder.Services
+    .AddSwitchyardOptions(builder.Configuration)
+    .AddSwitchyardInterpreter()
+    .AddSwitchyardTts()
+    .AddSwitchyardTransports()
+    .AddSwitchyardDispatcher()
+    .AddSwitchyardHealthChecks();
 
-// Apply defaults for anything not set.
-if (cfg.Transports.Http.Port == 0) cfg.Transports.Http.Port = 8080;
-if (cfg.Transports.Grpc.Port == 0) cfg.Transports.Grpc.Port = 50051;
-if (cfg.Server.HealthPort == 0) cfg.Server.HealthPort = 8081;
+// OpenAPI (built-in — replaces Swashbuckle).
+builder.Services.AddOpenApi();
+
+// Global JSON serialization using source-generated context.
+builder.Services.ConfigureHttpJsonOptions(opts =>
+    opts.SerializerOptions.TypeInfoResolverChain.Insert(0, SwitchyardJsonContext.Default));
+
+// Problem Details for consistent error responses.
+builder.Services.AddProblemDetails();
 
 // ---------------------------------------------------------------------------
 // Logging
 // ---------------------------------------------------------------------------
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
-var logLevel = cfg.Logging.Level.ToLowerInvariant() switch
-{
-    "debug" => LogLevel.Debug,
-    "warn" or "warning" => LogLevel.Warning,
-    "error" => LogLevel.Error,
-    _ => LogLevel.Information
-};
-builder.Logging.SetMinimumLevel(logLevel);
 
-// ---------------------------------------------------------------------------
-// Services
-// ---------------------------------------------------------------------------
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
-builder.Services.AddSingleton(cfg);
-builder.Services.AddHttpClient();
-
-// Interpreter
-builder.Services.AddSingleton<IInterpreter>(sp =>
+// Apply log level from options after building.
+builder.Services.AddSingleton<IConfigureOptions<LoggerFilterOptions>>(sp =>
 {
-    var httpFactory = sp.GetRequiredService<IHttpClientFactory>();
-    return cfg.Interpreter.Backend.ToLowerInvariant() switch
+    var opts = sp.GetRequiredService<IOptions<SwitchyardOptions>>().Value;
+    return new ConfigureOptions<LoggerFilterOptions>(filter =>
     {
-        "local" => new LocalInterpreter(cfg.Interpreter.Local,
-            httpFactory.CreateClient(), sp.GetRequiredService<ILogger<LocalInterpreter>>()),
-        _ => new OpenAIInterpreter(cfg.Interpreter.OpenAI,
-            httpFactory.CreateClient(), sp.GetRequiredService<ILogger<OpenAIInterpreter>>())
-    };
-});
-
-// TTS
-if (cfg.Tts.Enabled)
-{
-    builder.Services.AddSingleton<ISynthesizer>(sp =>
-        cfg.Tts.Backend.ToLowerInvariant() switch
+        var logLevel = opts.Logging.Level.ToLowerInvariant() switch
         {
-            "piper" => new PiperSynthesizer(cfg.Tts.Piper, sp.GetRequiredService<ILogger<PiperSynthesizer>>()),
-            _ => throw new InvalidOperationException($"Unknown TTS backend: {cfg.Tts.Backend}")
-        });
-}
-
-// Dispatcher
-builder.Services.AddSingleton<Dispatcher>(sp =>
-{
-    var interp = sp.GetRequiredService<IInterpreter>();
-    var synth = sp.GetService<ISynthesizer>();
-    var logger = sp.GetRequiredService<ILogger<Dispatcher>>();
-
-    var transports = new List<ITransport>();
-    if (cfg.Transports.Grpc.Enabled)
-        transports.Add(new GrpcTransport(cfg.Transports.Grpc.Port,
-            sp.GetRequiredService<ILogger<GrpcTransport>>()));
-    if (cfg.Transports.Mqtt.Enabled)
-        transports.Add(new MqttTransport(cfg.Transports.Mqtt.Broker, cfg.Transports.Mqtt.Topic,
-            sp.GetRequiredService<ILogger<MqttTransport>>()));
-
-    return new Dispatcher(interp, transports, synth, logger);
+            "debug" => LogLevel.Debug,
+            "warn" or "warning" => LogLevel.Warning,
+            "error" => LogLevel.Error,
+            _ => LogLevel.Information
+        };
+        filter.MinLevel = logLevel;
+    });
 });
 
 // ---------------------------------------------------------------------------
-// Build the app
+// Build & configure the pipeline.
 // ---------------------------------------------------------------------------
 var app = builder.Build();
 var logger = app.Services.GetRequiredService<ILogger<Program>>();
+var cfg = app.Services.GetRequiredService<IOptions<SwitchyardOptions>>().Value;
 
-app.UseSwagger();
-app.UseSwaggerUI();
+app.UseExceptionHandler();
+app.UseStatusCodePages();
 
-// ---------------------------------------------------------------------------
-// Health endpoints
-// ---------------------------------------------------------------------------
-var ready = false;
+// OpenAPI / Swagger UI.
+app.MapOpenApi();
 
-app.MapGet("/healthz", () => ready
-    ? Results.Ok(new { status = "ok" })
-    : Results.StatusCode(503))
-    .WithName("Healthz")
-    .WithOpenApi();
+// Health endpoints (built-in health checks).
+app.MapSwitchyardHealthChecks();
 
-app.MapGet("/readyz", () => ready
-    ? Results.Ok(new { status = "ok" })
-    : Results.StatusCode(503))
-    .WithName("Readyz")
-    .WithOpenApi();
-
-// ---------------------------------------------------------------------------
-// Dispatch endpoint
-// ---------------------------------------------------------------------------
-var dispatcher = app.Services.GetRequiredService<Dispatcher>();
-
-app.MapPost("/dispatch", async (HttpContext ctx) =>
-{
-    var msg = new DispatchMessage();
-    var contentType = ctx.Request.ContentType ?? "";
-
-    if (contentType.Contains("application/json"))
-    {
-        msg = await ctx.Request.ReadFromJsonAsync<DispatchMessage>(ctx.RequestAborted) ?? new();
-    }
-    else
-    {
-        // Raw audio
-        using var ms = new MemoryStream();
-        await ctx.Request.Body.CopyToAsync(ms, ctx.RequestAborted);
-        msg.Audio = ms.ToArray();
-        msg.ContentType = contentType;
-        msg.Source = ctx.Request.Headers["X-Switchyard-Source"].FirstOrDefault() ?? "";
-
-        var instrHeader = ctx.Request.Headers["X-Switchyard-Instruction"].FirstOrDefault();
-        if (!string.IsNullOrEmpty(instrHeader))
-            msg.Instruction = JsonSerializer.Deserialize<Instruction>(instrHeader) ?? new();
-    }
-
-    var result = await dispatcher.HandleAsync(msg, ctx.RequestAborted);
-    return Results.Ok(result);
-})
-.WithName("Dispatch")
-.Accepts<DispatchMessage>("application/json")
-.Produces<DispatchResult>()
-.WithOpenApi();
+// Dispatch endpoints (grouped).
+app.MapDispatchEndpoints();
 
 // ---------------------------------------------------------------------------
 // Start
@@ -163,7 +83,9 @@ app.MapPost("/dispatch", async (HttpContext ctx) =>
 logger.LogInformation("Switchyard C# starting — interpreter={Backend}, http_port={HttpPort}, health_port={HealthPort}",
     cfg.Interpreter.Backend, cfg.Transports.Http.Port, cfg.Server.HealthPort);
 
-ready = true;
+// Mark ready via the health check.
+var healthCheck = app.Services.GetRequiredService<SwitchyardHealthCheck>();
+healthCheck.MarkReady();
 logger.LogInformation("Switchyard C# ready");
 
 await app.RunAsync();
@@ -174,6 +96,7 @@ await app.RunAsync();
 static void MapEnvToConfig(ConfigurationManager config)
 {
     // Map SWITCHYARD_* single-underscore env vars to Switchyard:* hierarchical keys.
+    // The Go daemon uses single-underscore separators; ASP.NET Core uses double-underscore.
     var mapping = new Dictionary<string, string>
     {
         ["SWITCHYARD_INTERPRETER_BACKEND"] = "Switchyard:Interpreter:Backend",
@@ -212,7 +135,7 @@ static void MapEnvToConfig(ConfigurationManager config)
             env[configKey] = val;
     }
 
-    // Also resolve OPENAI_API_KEY as a fallback
+    // Also resolve OPENAI_API_KEY as a fallback.
     var openaiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
     if (!string.IsNullOrEmpty(openaiKey) && !env.ContainsKey("Switchyard:Interpreter:OpenAI:ApiKey"))
         env["Switchyard:Interpreter:OpenAI:ApiKey"] = openaiKey;

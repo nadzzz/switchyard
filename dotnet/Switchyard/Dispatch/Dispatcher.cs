@@ -7,38 +7,33 @@ using Switchyard.Tts;
 
 namespace Switchyard.Dispatch;
 
+/// <summary>Abstraction for the central dispatch engine.</summary>
+public interface IDispatcher
+{
+    Task<DispatchResult> HandleAsync(DispatchMessage msg, CancellationToken ct);
+}
+
 /// <summary>
 /// Central routing engine — receives messages from transports, runs them through
 /// the interpreter pipeline (transcribe → interpret), then routes the resulting
 /// commands to target services.
 /// </summary>
-public sealed class Dispatcher
+public sealed class Dispatcher(
+    IInterpreter interpreter,
+    IEnumerable<ITransport> transports,
+    ISynthesizer synthesizer,
+    ILogger<Dispatcher> logger) : IDispatcher
 {
-    private readonly IInterpreter _interpreter;
-    private readonly Dictionary<string, ITransport> _transports;
-    private readonly ISynthesizer? _synthesizer;
-    private readonly ILogger<Dispatcher> _logger;
-
-    public Dispatcher(
-        IInterpreter interpreter,
-        IEnumerable<ITransport> transports,
-        ISynthesizer? synthesizer,
-        ILogger<Dispatcher> logger)
-    {
-        _interpreter = interpreter;
-        _transports = transports.ToDictionary(t => t.Name);
-        _synthesizer = synthesizer;
-        _logger = logger;
-    }
+    private readonly Dictionary<string, ITransport> _transports = transports.ToDictionary(t => t.Name);
 
     /// <summary>The handler function passed to each transport.</summary>
     public async Task<DispatchResult> HandleAsync(DispatchMessage msg, CancellationToken ct)
     {
-        var sw = Stopwatch.StartNew();
+        var startTimestamp = Stopwatch.GetTimestamp();
         var respMode = ResolveResponseMode(
             ResponseModeExtensions.Parse(msg.Instruction.ResponseMode));
 
-        _logger.LogInformation("Dispatch started: id={Id}, source={Source}, response_mode={Mode}",
+        logger.LogInformation("Dispatch started: id={Id}, source={Source}, response_mode={Mode}",
             msg.Id, msg.Source, respMode.ToWireString());
 
         var result = new DispatchResult { MessageId = msg.Id };
@@ -49,12 +44,12 @@ public sealed class Dispatcher
 
         if (msg.HasAudio)
         {
-            _logger.LogDebug("Transcribing audio: {ContentType}, {Bytes} bytes",
+            logger.LogDebug("Transcribing audio: {ContentType}, {Bytes} bytes",
                 msg.ContentType, msg.Audio!.Length);
 
             try
             {
-                var tRes = await _interpreter.TranscribeAsync(
+                var tRes = await interpreter.TranscribeAsync(
                     msg.Audio!, msg.ContentType ?? "audio/wav",
                     new TranscribeOpts { Prompt = msg.Instruction.Prompt }, ct);
 
@@ -62,13 +57,13 @@ public sealed class Dispatcher
                 detectedLang = tRes.Language;
                 result.Transcript = transcript;
                 result.Language = detectedLang;
-                _logger.LogInformation("Transcription complete: {Length} chars, language={Lang}",
+                logger.LogInformation("Transcription complete: {Length} chars, language={Lang}",
                     transcript.Length, detectedLang);
             }
             catch (Exception ex)
             {
                 result.Error = $"transcription failed: {ex.Message}";
-                _logger.LogError(ex, "Transcription failed");
+                logger.LogError(ex, "Transcription failed");
                 return result;
             }
         }
@@ -76,7 +71,7 @@ public sealed class Dispatcher
         {
             transcript = msg.Text!;
             result.Transcript = transcript;
-            _logger.LogDebug("Using text input directly");
+            logger.LogDebug("Using text input directly");
         }
         else
         {
@@ -87,44 +82,44 @@ public sealed class Dispatcher
         // Step 2: Interpret transcript into commands.
         try
         {
-            var interpResult = await _interpreter.InterpretAsync(transcript, msg.Instruction, ct);
+            var interpResult = await interpreter.InterpretAsync(transcript, msg.Instruction, ct);
             result.Commands = interpResult.Commands;
-            _logger.LogInformation("Interpretation complete: {Count} commands", interpResult.Commands.Count);
+            logger.LogInformation("Interpretation complete: {Count} commands", interpResult.Commands.Count);
 
             // Step 3: Populate natural-language response based on response_mode.
             if (respMode.WantText())
                 result.ResponseText = interpResult.ResponseText;
 
-            if (respMode.WantAudio() && _synthesizer is not null && !string.IsNullOrEmpty(interpResult.ResponseText))
+            if (respMode.WantAudio() && synthesizer is not NullSynthesizer && !string.IsNullOrEmpty(interpResult.ResponseText))
             {
                 var lang = string.IsNullOrEmpty(detectedLang) ? "en" : detectedLang;
-                _logger.LogDebug("Synthesizing response: language={Lang}, text_length={Len}",
+                logger.LogDebug("Synthesizing response: language={Lang}, text_length={Len}",
                     lang, interpResult.ResponseText.Length);
 
                 try
                 {
-                    var synthResult = await _synthesizer.SynthesizeAsync(
+                    var synthResult = await synthesizer.SynthesizeAsync(
                         interpResult.ResponseText,
                         new SynthesizeOpts { Language = lang }, ct);
                     result.SetResponseAudioBytes(synthResult.Audio);
                     result.ResponseContentType = synthResult.ContentType;
-                    _logger.LogInformation("TTS synthesis complete: {Bytes} audio bytes", synthResult.Audio.Length);
+                    logger.LogInformation("TTS synthesis complete: {Bytes} audio bytes", synthResult.Audio.Length);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "TTS synthesis failed, continuing without audio");
+                    logger.LogWarning(ex, "TTS synthesis failed, continuing without audio");
                 }
             }
         }
         catch (Exception ex)
         {
             result.Error = $"interpretation failed: {ex.Message}";
-            _logger.LogError(ex, "Interpretation failed");
+            logger.LogError(ex, "Interpretation failed");
             return result;
         }
 
         // Step 4: Route commands to target services.
-        var payload = JsonSerializer.SerializeToUtf8Bytes(result);
+        var payload = JsonSerializer.SerializeToUtf8Bytes(result, SwitchyardJsonContext.Default.DispatchResult);
 
         if (msg.Instruction.Targets is { Count: > 0 } targets)
         {
@@ -132,7 +127,7 @@ public sealed class Dispatcher
             {
                 if (!_transports.TryGetValue(target.Protocol, out var transport))
                 {
-                    _logger.LogWarning("No transport for protocol {Protocol}, target {Target}",
+                    logger.LogWarning("No transport for protocol {Protocol}, target {Target}",
                         target.Protocol, target.ServiceName);
                     continue;
                 }
@@ -141,17 +136,18 @@ public sealed class Dispatcher
                 {
                     await transport.SendAsync(target, payload, ct);
                     result.RoutedTo.Add(target.ServiceName);
-                    _logger.LogInformation("Routed to target {Target}", target.ServiceName);
+                    logger.LogInformation("Routed to target {Target}", target.ServiceName);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Failed to send to target {Target}", target.ServiceName);
+                    logger.LogError(ex, "Failed to send to target {Target}", target.ServiceName);
                 }
             }
         }
 
-        _logger.LogInformation("Dispatch complete: {Duration}ms, routed_to={Count}",
-            sw.ElapsedMilliseconds, result.RoutedTo.Count);
+        var elapsed = Stopwatch.GetElapsedTime(startTimestamp);
+        logger.LogInformation("Dispatch complete: {Duration}ms, routed_to={Count}",
+            elapsed.TotalMilliseconds, result.RoutedTo.Count);
 
         return result;
     }
@@ -159,6 +155,6 @@ public sealed class Dispatcher
     private ResponseMode ResolveResponseMode(ResponseMode mode) => mode switch
     {
         ResponseMode.None or ResponseMode.Text or ResponseMode.Audio or ResponseMode.TextAudio => mode,
-        _ => _synthesizer is not null ? ResponseMode.TextAudio : ResponseMode.Text
+        _ => synthesizer is not NullSynthesizer ? ResponseMode.TextAudio : ResponseMode.Text
     };
 }

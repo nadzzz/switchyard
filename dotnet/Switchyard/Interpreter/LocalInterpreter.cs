@@ -24,7 +24,7 @@ public sealed class LocalInterpreter : IInterpreter
 
     public string Name => "local";
 
-    public LocalInterpreter(LocalConfig cfg, HttpClient client, ILogger<LocalInterpreter> logger)
+    public LocalInterpreter(LocalOptions cfg, HttpClient client, ILogger<LocalInterpreter> logger)
     {
         _whisperEndpoint = cfg.WhisperEndpoint;
         _whisperType = string.IsNullOrEmpty(cfg.WhisperType) ? "openai" : cfg.WhisperType;

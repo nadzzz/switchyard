@@ -168,3 +168,19 @@ public sealed class DispatchResult
         }
     }
 }
+
+/// <summary>
+/// Source-generated JSON serializer context for AOT/trimming compatibility.
+/// Use <c>SwitchyardJsonContext.Default</c> wherever serialization is needed.
+/// </summary>
+[JsonSourceGenerationOptions(
+    PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower,
+    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    WriteIndented = false)]
+[JsonSerializable(typeof(DispatchMessage))]
+[JsonSerializable(typeof(DispatchResult))]
+[JsonSerializable(typeof(Instruction))]
+[JsonSerializable(typeof(Command))]
+[JsonSerializable(typeof(MessageTarget))]
+[JsonSerializable(typeof(JsonElement))]
+public sealed partial class SwitchyardJsonContext : JsonSerializerContext;

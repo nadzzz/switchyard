@@ -22,9 +22,9 @@ public sealed class OpenAIInterpreter : IInterpreter
 
     public string Name => "openai";
 
-    public OpenAIInterpreter(OpenAIConfig cfg, HttpClient client, ILogger<OpenAIInterpreter> logger)
+    public OpenAIInterpreter(OpenAIOptions cfg, HttpClient client, ILogger<OpenAIInterpreter> logger)
     {
-        _apiKey = ResolveEnvRef(cfg.ApiKey);
+        _apiKey = cfg.ApiKey;
         _transcriptionModel = cfg.TranscriptionModel;
         _completionModel = cfg.CompletionModel;
         _client = client;
@@ -105,15 +105,4 @@ public sealed class OpenAIInterpreter : IInterpreter
     }
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
-
-    private static string ResolveEnvRef(string val)
-    {
-        if (val.StartsWith("${") && val.EndsWith("}"))
-        {
-            var envKey = val[2..^1];
-            var envVal = Environment.GetEnvironmentVariable(envKey);
-            if (!string.IsNullOrEmpty(envVal)) return envVal;
-        }
-        return val;
-    }
 }

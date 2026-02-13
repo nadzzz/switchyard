@@ -34,7 +34,7 @@ public sealed class PiperSynthesizer : ISynthesizer
     private readonly Dictionary<string, string> _voices;
     private readonly ILogger<PiperSynthesizer> _logger;
 
-    public PiperSynthesizer(PiperConfig cfg, ILogger<PiperSynthesizer> logger)
+    public PiperSynthesizer(PiperOptions cfg, ILogger<PiperSynthesizer> logger)
     {
         _endpoint = CleanEndpoint(cfg.Endpoint);
         _endpoints = cfg.Endpoints.ToDictionary(

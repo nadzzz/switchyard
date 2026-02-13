@@ -23,12 +23,9 @@ public sealed class HttpTransport : ITransport
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.ConfigureKestrel(k => k.ListenAnyIP(_port));
         builder.Services.AddEndpointsApiExplorer();
-        builder.Services.AddSwaggerGen();
         builder.Logging.ClearProviders(); // Use parent's logging
 
         _app = builder.Build();
-        _app.UseSwagger();
-        _app.UseSwaggerUI();
 
         _app.MapPost("/dispatch", async (HttpContext ctx) =>
         {
