@@ -82,6 +82,12 @@ func (t *Transport) Listen(ctx context.Context, handler transport.Handler) error
 // @Description Accepts a JSON message (with optional pre-transcribed text or base64 audio) or raw audio bytes.
 // @Description The message is run through the interpreter pipeline (transcribe → interpret) and the resulting
 // @Description commands are routed to the configured target services.
+// @Description
+// @Description The instruction.response_mode field controls natural-language output:
+// @Description   - "none"       — dispatch results only (no NL response)
+// @Description   - "text"       — text response only
+// @Description   - "audio"      — TTS-synthesized audio only (base64 in response_audio)
+// @Description   - "text+audio" — both text and audio (default when TTS is enabled)
 // @Tags        dispatch
 // @Accept      json
 // @Accept      audio/wav
@@ -90,7 +96,7 @@ func (t *Transport) Listen(ctx context.Context, handler transport.Handler) error
 // @Param       message  body      message.Message  true  "Dispatch request (JSON). For raw audio, POST the bytes directly with the appropriate Content-Type."
 // @Param       X-Switchyard-Source       header  string  false  "Sender identifier (used with raw audio uploads)"
 // @Param       X-Switchyard-Instruction  header  string  false  "JSON-encoded Instruction (used with raw audio uploads)"
-// @Success     200  {object}  message.DispatchResult  "Interpreted commands"
+// @Success     200  {object}  message.DispatchResult  "Dispatch result with optional NL response based on response_mode"
 // @Failure     400  {string}  string  "Invalid request body or headers"
 // @Failure     500  {string}  string  "Internal processing error"
 // @Router      /dispatch [post]

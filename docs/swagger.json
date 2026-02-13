@@ -19,7 +19,7 @@
     "paths": {
         "/dispatch": {
             "post": {
-                "description": "Accepts a JSON message (with optional pre-transcribed text or base64 audio) or raw audio bytes.\nThe message is run through the interpreter pipeline (transcribe → interpret) and the resulting\ncommands are routed to the configured target services.",
+                "description": "Accepts a JSON message (with optional pre-transcribed text or base64 audio) or raw audio bytes.\nThe message is run through the interpreter pipeline (transcribe → interpret) and the resulting\ncommands are routed to the configured target services.\n\nThe instruction.response_mode field controls natural-language output:\n- \"none\"       — dispatch results only (no NL response)\n- \"text\"       — text response only\n- \"audio\"      — TTS-synthesized audio only (base64 in response_audio)\n- \"text+audio\" — both text and audio (default when TTS is enabled)",
                 "consumes": [
                     "application/json",
                     "audio/wav",
@@ -57,7 +57,7 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "Interpreted commands",
+                        "description": "Dispatch result with optional NL response based on response_mode",
                         "schema": {
                             "$ref": "#/definitions/github_com_nadzzz_switchyard_internal_message.DispatchResult"
                         }
@@ -114,8 +114,24 @@
                     "description": "Error is set if processing failed at any stage.",
                     "type": "string"
                 },
+                "language": {
+                    "description": "Language is the ISO-639-1 code detected during transcription (e.g., \"en\", \"fr\", \"es\").",
+                    "type": "string"
+                },
                 "message_id": {
                     "description": "MessageID is the original message ID.",
+                    "type": "string"
+                },
+                "response_audio": {
+                    "description": "ResponseAudio is the TTS-synthesized audio as a base64-encoded string.\nPopulated when response_mode is \"audio\" or \"text+audio\".",
+                    "type": "string"
+                },
+                "response_content_type": {
+                    "description": "ResponseContentType is the MIME type of ResponseAudio (e.g., \"audio/wav\").",
+                    "type": "string"
+                },
+                "response_text": {
+                    "description": "ResponseText is a natural-language confirmation (in the detected language).\nPopulated when response_mode is \"text\" or \"text+audio\".",
                     "type": "string"
                 },
                 "routed_to": {
@@ -134,13 +150,21 @@
         "github_com_nadzzz_switchyard_internal_message.Instruction": {
             "type": "object",
             "properties": {
+                "command_format": {
+                    "description": "CommandFormat specifies the desired command output schema\n(e.g., \"homeassistant\", \"json\", \"ros2\").",
+                    "type": "string"
+                },
                 "prompt": {
                     "description": "Prompt is additional context for the LLM interpreter (e.g., \"return motor commands\").",
                     "type": "string"
                 },
-                "response_format": {
-                    "description": "ResponseFormat specifies the desired output format (e.g., \"homeassistant\", \"json\", \"ros2\").",
-                    "type": "string"
+                "response_mode": {
+                    "description": "ResponseMode controls the natural-language response output:\n  \"none\"       — no NL response (dispatch results only)\n  \"text\"       — text response only\n  \"audio\"      — TTS-synthesized audio only\n  \"text+audio\" — both text and audio\nDefaults to \"text\" when TTS is disabled, \"text+audio\" when TTS is enabled.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/github_com_nadzzz_switchyard_internal_message.ResponseMode"
+                        }
+                    ]
                 },
                 "targets": {
                     "description": "Targets lists the services that should receive the interpreted commands.\nThe original sender always receives the response regardless of this list.",
@@ -190,6 +214,21 @@
                     "type": "string"
                 }
             }
+        },
+        "github_com_nadzzz_switchyard_internal_message.ResponseMode": {
+            "type": "string",
+            "enum": [
+                "none",
+                "text",
+                "audio",
+                "text+audio"
+            ],
+            "x-enum-varnames": [
+                "ResponseModeNone",
+                "ResponseModeText",
+                "ResponseModeAudio",
+                "ResponseModeTextAudio"
+            ]
         },
         "github_com_nadzzz_switchyard_internal_message.Target": {
             "type": "object",

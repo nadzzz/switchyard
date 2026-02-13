@@ -62,11 +62,15 @@ message Instruction {
   // Downstream services that should receive the interpreted commands.
   repeated Target targets = 1;
 
-  // Desired output format (e.g., "homeassistant", "json", "ros2").
-  string response_format = 2;
+  // Desired command output schema (e.g., "homeassistant", "json", "ros2").
+  string command_format = 2;
 
   // Additional context for the LLM (e.g., "return motor commands for a 6-axis arm").
   string prompt = 3;
+
+  // Controls natural-language response output: "none", "text", "audio", "text+audio".
+  // Defaults to "text" when TTS is disabled, "text+audio" when TTS is enabled.
+  string response_mode = 4;
 }
 
 // Target defines a downstream service.
@@ -100,6 +104,18 @@ message DispatchResponse {
 
   // Error message if processing failed.
   string error = 5;
+
+  // Detected language (ISO-639-1, e.g., "en", "fr").
+  string language = 6;
+
+  // Natural-language text response (when response_mode includes text).
+  string response_text = 7;
+
+  // Base64-encoded TTS audio (when response_mode includes audio).
+  string response_audio = 8;
+
+  // MIME type of response_audio (e.g., "audio/wav").
+  string response_content_type = 9;
 }
 
 // Command is a single structured command.

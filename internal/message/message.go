@@ -2,8 +2,30 @@
 package message
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"time"
+)
+
+// ResponseMode controls what natural-language output the caller wants.
+// This follows the industry-standard pattern (OpenAI modalities, Dialogflow
+// outputAudioConfig): the caller declares desired output in the request body,
+// and the server populates or omits response fields accordingly.
+type ResponseMode string
+
+const (
+	// ResponseModeNone suppresses all natural-language output.
+	// Only command dispatch results are returned.
+	ResponseModeNone ResponseMode = "none"
+
+	// ResponseModeText returns a natural-language text response.
+	ResponseModeText ResponseMode = "text"
+
+	// ResponseModeAudio returns TTS-synthesized audio only (no text).
+	ResponseModeAudio ResponseMode = "audio"
+
+	// ResponseModeTextAudio returns both text and synthesized audio.
+	ResponseModeTextAudio ResponseMode = "text+audio"
 )
 
 // Message represents an incoming request from any transport.
@@ -41,8 +63,17 @@ type Instruction struct {
 	// The original sender always receives the response regardless of this list.
 	Targets []Target `json:"targets,omitempty"`
 
-	// ResponseFormat specifies the desired output format (e.g., "homeassistant", "json", "ros2").
-	ResponseFormat string `json:"response_format"`
+	// CommandFormat specifies the desired command output schema
+	// (e.g., "homeassistant", "json", "ros2").
+	CommandFormat string `json:"command_format"`
+
+	// ResponseMode controls the natural-language response output:
+	//   "none"       — no NL response (dispatch results only)
+	//   "text"       — text response only
+	//   "audio"      — TTS-synthesized audio only
+	//   "text+audio" — both text and audio
+	// Defaults to "text" when TTS is disabled, "text+audio" when TTS is enabled.
+	ResponseMode ResponseMode `json:"response_mode,omitempty"`
 
 	// Prompt is additional context for the LLM interpreter (e.g., "return motor commands").
 	Prompt string `json:"prompt,omitempty"`
@@ -93,14 +124,23 @@ type DispatchResult struct {
 	RoutedTo []string `json:"routed_to"`
 
 	// ResponseText is a natural-language confirmation (in the detected language).
+	// Populated when response_mode is "text" or "text+audio".
 	ResponseText string `json:"response_text,omitempty"`
 
-	// ResponseAudio is the TTS-synthesized audio of ResponseText (WAV format).
-	ResponseAudio []byte `json:"response_audio,omitempty"`
+	// ResponseAudio is the TTS-synthesized audio as a base64-encoded string.
+	// Populated when response_mode is "audio" or "text+audio".
+	ResponseAudio string `json:"response_audio,omitempty"`
 
 	// ResponseContentType is the MIME type of ResponseAudio (e.g., "audio/wav").
 	ResponseContentType string `json:"response_content_type,omitempty"`
 
 	// Error is set if processing failed at any stage.
 	Error string `json:"error,omitempty"`
+}
+
+// SetResponseAudioBytes base64-encodes raw audio bytes into ResponseAudio.
+func (r *DispatchResult) SetResponseAudioBytes(audio []byte) {
+	if len(audio) > 0 {
+		r.ResponseAudio = base64.StdEncoding.EncodeToString(audio)
+	}
 }

@@ -39,12 +39,40 @@ func New(interp interpreter.Interpreter, transports []transport.Transport, synth
 	}
 }
 
+// resolveResponseMode determines the effective ResponseMode for a message.
+// If the caller didn't specify one, the default depends on whether TTS is available.
+func (d *Dispatcher) resolveResponseMode(mode message.ResponseMode) message.ResponseMode {
+	switch mode {
+	case message.ResponseModeNone, message.ResponseModeText,
+		message.ResponseModeAudio, message.ResponseModeTextAudio:
+		return mode
+	default:
+		// Default: text+audio when TTS is available, text-only otherwise.
+		if d.synthesizer != nil {
+			return message.ResponseModeTextAudio
+		}
+		return message.ResponseModeText
+	}
+}
+
+// wantText returns true if the response mode includes text output.
+func wantText(mode message.ResponseMode) bool {
+	return mode == message.ResponseModeText || mode == message.ResponseModeTextAudio
+}
+
+// wantAudio returns true if the response mode includes audio output.
+func wantAudio(mode message.ResponseMode) bool {
+	return mode == message.ResponseModeAudio || mode == message.ResponseModeTextAudio
+}
+
 // Handle processes a single message through the full pipeline.
 // This function is passed as the transport.Handler to each transport.
 func (d *Dispatcher) Handle(ctx context.Context, msg *message.Message) (*message.DispatchResult, error) {
 	start := time.Now()
 	logger := slog.With("message_id", msg.ID, "source", msg.Source)
-	logger.Info("dispatch started")
+
+	respMode := d.resolveResponseMode(msg.Instruction.ResponseMode)
+	logger.Info("dispatch started", "response_mode", respMode)
 
 	result := &message.DispatchResult{
 		MessageID: msg.ID,
@@ -85,23 +113,26 @@ func (d *Dispatcher) Handle(ctx context.Context, msg *message.Message) (*message
 		return result, nil
 	}
 	result.Commands = interpResult.Commands
-	result.ResponseText = interpResult.ResponseText
 	logger.Info("interpretation complete", "commands", len(interpResult.Commands))
 
-	// Step 3: Synthesize a spoken response (if TTS is enabled and we have text).
-	if d.synthesizer != nil && result.ResponseText != "" {
+	// Step 3: Populate natural-language response based on response_mode.
+	if wantText(respMode) {
+		result.ResponseText = interpResult.ResponseText
+	}
+
+	if wantAudio(respMode) && d.synthesizer != nil && interpResult.ResponseText != "" {
 		lang := detectedLang
 		if lang == "" {
 			lang = "en"
 		}
-		logger.Debug("synthesizing response", "language", lang, "text_length", len(result.ResponseText))
-		synthResult, err := d.synthesizer.Synthesize(ctx, result.ResponseText, tts.SynthesizeOpts{
+		logger.Debug("synthesizing response", "language", lang, "text_length", len(interpResult.ResponseText))
+		synthResult, err := d.synthesizer.Synthesize(ctx, interpResult.ResponseText, tts.SynthesizeOpts{
 			Language: lang,
 		})
 		if err != nil {
 			logger.Warn("TTS synthesis failed, continuing without audio", "error", err)
 		} else {
-			result.ResponseAudio = synthResult.Audio
+			result.SetResponseAudioBytes(synthResult.Audio)
 			result.ResponseContentType = synthResult.ContentType
 			logger.Info("TTS synthesis complete", "audio_bytes", len(synthResult.Audio))
 		}

@@ -208,8 +208,8 @@ func buildSystemPrompt(instr message.Instruction) string {
 	sb.WriteString("You are a voice command interpreter for a home automation and robotics system.\n")
 	sb.WriteString("Interpret the user's transcribed speech and return structured commands as JSON.\n\n")
 
-	if instr.ResponseFormat != "" {
-		sb.WriteString("Output format: " + instr.ResponseFormat + "\n")
+	if instr.CommandFormat != "" {
+		sb.WriteString("Output format: " + instr.CommandFormat + "\n")
 	}
 	if instr.Prompt != "" {
 		sb.WriteString("Additional context: " + instr.Prompt + "\n")

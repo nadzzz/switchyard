@@ -151,22 +151,34 @@ scripts/                 → Build scripts (bash + PowerShell)
 ### HTTP
 
 ```bash
-# Send audio for dispatch
+# Send audio for dispatch (text+audio response by default when TTS is enabled)
 curl -X POST http://localhost:8080/dispatch \
   -H "Content-Type: audio/wav" \
   -H "X-Switchyard-Source: my-phone" \
-  -H 'X-Switchyard-Instruction: {"response_format":"homeassistant","targets":[{"service_name":"homeassistant","endpoint":"http://ha.local:8123/api/services","protocol":"http"}]}' \
+  -H 'X-Switchyard-Instruction: {"command_format":"homeassistant","response_mode":"text","targets":[{"service_name":"homeassistant","endpoint":"http://ha.local:8123/api/services","protocol":"http"}]}' \
   --data-binary @recording.wav
 
-# Send JSON message
+# Send JSON message with voice response
 curl -X POST http://localhost:8080/dispatch \
   -H "Content-Type: application/json" \
   -d '{
     "source": "my-phone",
     "text": "Turn on the living room lights",
     "instruction": {
-      "response_format": "homeassistant",
+      "command_format": "homeassistant",
+      "response_mode": "text+audio",
       "targets": [{"service_name": "homeassistant", "endpoint": "http://ha.local:8123/api/services", "protocol": "http"}]
+    }
+  }'
+
+# Pure conversation (no command dispatch)
+curl -X POST http://localhost:8080/dispatch \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source": "my-phone",
+    "text": "What is the weather like?",
+    "instruction": {
+      "response_mode": "text"
     }
   }'
 ```
