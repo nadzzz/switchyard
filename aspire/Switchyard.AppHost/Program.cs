@@ -103,6 +103,38 @@ var switchyard = builder.AddDockerfile("switchyard", "../../", "build/Dockerfile
     .WithEnvironment("SWITCHYARD_LOGGING_LEVEL", "debug")
     .WithEnvironment("SWITCHYARD_LOGGING_FORMAT", "text");
 
+// ---------------------------------------------------------------------------
+// Switchyard C# daemon — runs side-by-side with the Go version on different ports.
+// Uses the same sub-services (whisper, ollama, piper).
+// ---------------------------------------------------------------------------
+var switchyardCsharp = builder.AddProject<Projects.Switchyard>("switchyard-csharp")
+    .WithHttpEndpoint(port: 9080, targetPort: 9080, name: "http")
+    .WithEndpoint(port: 50151, targetPort: 50151, name: "grpc", scheme: "http")
+    .WithUrls(context =>
+    {
+        foreach (var url in context.Urls)
+        {
+            url.DisplayText = url.Endpoint?.EndpointName switch
+            {
+                "http" => "HTTP API",
+                "grpc" => "gRPC",
+                _      => url.DisplayText
+            };
+        }
+
+        var httpUrl = context.Urls.FirstOrDefault(u => u.Endpoint?.EndpointName == "http");
+        if (httpUrl is not null)
+        {
+            context.Urls.Add(new ResourceUrlAnnotation
+            {
+                Url = $"{httpUrl.Url}/swagger/index.html",
+                DisplayText = "Swagger UI"
+            });
+        }
+    })
+    .WithEnvironment("SWITCHYARD_LOGGING_LEVEL", "debug")
+    .WithEnvironment("SWITCHYARD_LOGGING_FORMAT", "text");
+
 if (useLocalMachine)
 {
     // ── localmachine: whisper.cpp container + Ollama container + Piper TTS (en + fr) ──
@@ -151,6 +183,48 @@ if (useLocalMachine)
             ctx.EnvironmentVariables["SWITCHYARD_TTS_PIPER_ENDPOINT"] =
                 ReferenceExpression.Create($"{enEp}");
         });
+
+    // C# switchyard — same sub-services, different ports
+    switchyardCsharp = switchyardCsharp
+        .WaitFor(ollamaModel!)
+        .WaitFor(whisperContainer!)
+        .WaitFor(piperEnContainer!)
+        .WaitFor(piperFrContainer!)
+        .WithEnvironment("SWITCHYARD_INTERPRETER_BACKEND", "local")
+        .WithEnvironment("SWITCHYARD_INTERPRETER_LOCAL_WHISPER_TYPE", "openai")
+        .WithEnvironment("SWITCHYARD_INTERPRETER_LOCAL_LLM_MODEL", "llama3.2:1b")
+        .WithEnvironment("SWITCHYARD_TTS_ENABLED", "true")
+        .WithEnvironment("SWITCHYARD_TTS_BACKEND", "piper")
+        .WithEnvironment(ctx =>
+        {
+            var wEp = whisperContainer!.GetEndpoint("whisper");
+            ctx.EnvironmentVariables["SWITCHYARD_INTERPRETER_LOCAL_WHISPER_ENDPOINT"] =
+                ReferenceExpression.Create($"{wEp}/inference");
+        })
+        .WithEnvironment(ctx =>
+        {
+            var oEp = ollamaModel!.Resource.Parent.PrimaryEndpoint;
+            ctx.EnvironmentVariables["SWITCHYARD_INTERPRETER_LOCAL_LLM_ENDPOINT"] =
+                ReferenceExpression.Create($"{oEp}/api/generate");
+        })
+        .WithEnvironment(ctx =>
+        {
+            var enEp = piperEnContainer!.GetEndpoint("piper-en");
+            ctx.EnvironmentVariables["SWITCHYARD_TTS_PIPER_ENDPOINTS_EN"] =
+                ReferenceExpression.Create($"{enEp}");
+        })
+        .WithEnvironment(ctx =>
+        {
+            var frEp = piperFrContainer!.GetEndpoint("piper-fr");
+            ctx.EnvironmentVariables["SWITCHYARD_TTS_PIPER_ENDPOINTS_FR"] =
+                ReferenceExpression.Create($"{frEp}");
+        })
+        .WithEnvironment(ctx =>
+        {
+            var enEp = piperEnContainer!.GetEndpoint("piper-en");
+            ctx.EnvironmentVariables["SWITCHYARD_TTS_PIPER_ENDPOINT"] =
+                ReferenceExpression.Create($"{enEp}");
+        });
 }
 else if (useLocalNetwork)
 {
@@ -161,11 +235,19 @@ else if (useLocalNetwork)
         .WithEnvironment("SWITCHYARD_INTERPRETER_LOCAL_WHISPER_TYPE", "asr")
         .WithEnvironment("SWITCHYARD_INTERPRETER_LOCAL_VAD_FILTER", "true")
         .WithEnvironment("SWITCHYARD_INTERPRETER_LOCAL_LLM_ENDPOINT", "http://nadznas:11434/api/generate");
+
+    switchyardCsharp = switchyardCsharp
+        .WithEnvironment("SWITCHYARD_INTERPRETER_BACKEND", "local")
+        .WithEnvironment("SWITCHYARD_INTERPRETER_LOCAL_WHISPER_ENDPOINT", "http://nadznas:9300/asr")
+        .WithEnvironment("SWITCHYARD_INTERPRETER_LOCAL_WHISPER_TYPE", "asr")
+        .WithEnvironment("SWITCHYARD_INTERPRETER_LOCAL_VAD_FILTER", "true")
+        .WithEnvironment("SWITCHYARD_INTERPRETER_LOCAL_LLM_ENDPOINT", "http://nadznas:11434/api/generate");
 }
 else
 {
     // ── cloud: OpenAI (default) ─────────────────────────────────────────
     switchyard = switchyard.WithEnvironment("SWITCHYARD_INTERPRETER_BACKEND", "openai");
+    switchyardCsharp = switchyardCsharp.WithEnvironment("SWITCHYARD_INTERPRETER_BACKEND", "openai");
 }
 
 // Inject secrets from user-secrets or environment.
@@ -173,11 +255,13 @@ else
 if (builder.Configuration["OPENAI_API_KEY"] is string openaiKey && openaiKey.Length > 0)
 {
     switchyard = switchyard.WithEnvironment("OPENAI_API_KEY", openaiKey);
+    switchyardCsharp = switchyardCsharp.WithEnvironment("OPENAI_API_KEY", openaiKey);
 }
 
 if (builder.Configuration["HA_TOKEN"] is string haToken && haToken.Length > 0)
 {
     switchyard = switchyard.WithEnvironment("HA_TOKEN", haToken);
+    switchyardCsharp = switchyardCsharp.WithEnvironment("HA_TOKEN", haToken);
 }
 
 // ---------------------------------------------------------------------------
@@ -193,6 +277,13 @@ var testClient = builder.AddProject<Projects.Switchyard_TestClient>("testclient"
             ReferenceExpression.Create($"{httpEp}");
         ctx.EnvironmentVariables["services__switchyard__grpc__0"] =
             ReferenceExpression.Create($"{grpcEp}");
+
+        var csharpHttpEp = switchyardCsharp.GetEndpoint("http");
+        var csharpGrpcEp = switchyardCsharp.GetEndpoint("grpc");
+        ctx.EnvironmentVariables["services__switchyard-csharp__http__0"] =
+            ReferenceExpression.Create($"{csharpHttpEp}");
+        ctx.EnvironmentVariables["services__switchyard-csharp__grpc__0"] =
+            ReferenceExpression.Create($"{csharpGrpcEp}");
     });
 
 // ---------------------------------------------------------------------------

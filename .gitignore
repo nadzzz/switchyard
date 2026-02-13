@@ -37,6 +37,11 @@ aspire/**/bin/
 aspire/**/obj/
 aspire/**/*.user
 
+# Switchyard C# port
+dotnet/**/bin/
+dotnet/**/obj/
+dotnet/**/*.user
+
 # React SPA (TestClient)
 aspire/Switchyard.TestClient/clientapp/node_modules/
 aspire/Switchyard.TestClient/clientapp/dist/

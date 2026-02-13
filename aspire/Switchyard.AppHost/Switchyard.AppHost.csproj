@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Switchyard.TestClient\Switchyard.TestClient.csproj" />
+    <ProjectReference Include="..\..\dotnet\Switchyard\Switchyard.csproj" />
   </ItemGroup>
 
 </Project>
