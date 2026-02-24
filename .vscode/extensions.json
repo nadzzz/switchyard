@@ -2,7 +2,7 @@
     "recommendations": [
         "golang.go",
         "ms-dotnettools.csdevkit",
-        "ms-dotnettools.dotnet-aspire",
+        "microsoft-aspire.aspire-vscode",
         "zxh404.vscode-proto3",
         "ms-azuretools.vscode-docker"
     ]

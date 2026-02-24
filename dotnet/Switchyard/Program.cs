@@ -3,6 +3,7 @@
 // Interprets audio/text inputs and routes structured commands to target services.
 
 using Microsoft.Extensions.Options;
+using Scalar.AspNetCore;
 using Switchyard.Config;
 using Switchyard.DependencyInjection;
 using Switchyard.Endpoints;
@@ -67,8 +68,13 @@ var cfg = app.Services.GetRequiredService<IOptions<SwitchyardOptions>>().Value;
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 
-// OpenAPI / Swagger UI.
+// OpenAPI + Scalar UI + Swagger UI.
 app.MapOpenApi();
+app.MapScalarApiReference();
+app.UseSwaggerUI(opts =>
+{
+    opts.SwaggerEndpoint("/openapi/v1.json", "Switchyard API");
+});
 
 // Health endpoints (built-in health checks).
 app.MapSwitchyardHealthChecks();

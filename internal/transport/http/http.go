@@ -54,6 +54,12 @@ func (t *Transport) Listen(ctx context.Context, handler transport.Handler) error
 		httpSwagger.URL("/swagger/doc.json"),
 	))
 
+	// Scalar API Reference — modern alternative docs UI.
+	mux.HandleFunc("GET /scalar", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = io.WriteString(w, scalarHTML)
+	})
+
 	t.server = &http.Server{
 		Addr:              fmt.Sprintf(":%d", t.port),
 		Handler:           mux,
@@ -199,3 +205,17 @@ func (r *byteReader) Read(p []byte) (int, error) {
 	r.pos += n
 	return n, nil
 }
+
+// scalarHTML is the self-contained page served at /scalar.
+const scalarHTML = `<!DOCTYPE html>
+<html>
+<head>
+  <title>Switchyard API Reference</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+</head>
+<body>
+  <script id="api-reference" data-url="/swagger/doc.json"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+</body>
+</html>`

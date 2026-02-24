@@ -53,8 +53,7 @@ public sealed class HttpTransport : ITransport
             var result = await handler(msg, ctx.RequestAborted);
             return Results.Ok(result);
         })
-        .WithName("Dispatch")
-        .WithOpenApi();
+        .WithName("Dispatch");
 
         _logger.LogInformation("HTTP transport listening on port {Port}", _port);
 

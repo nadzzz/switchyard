@@ -11,8 +11,7 @@ public static class DispatchEndpoints
 {
     public static RouteGroupBuilder MapDispatchEndpoints(this IEndpointRouteBuilder routes)
     {
-        var group = routes.MapGroup("")
-            .WithOpenApi();
+        var group = routes.MapGroup("");
 
         group.MapPost("/dispatch", HandleDispatchAsync)
             .WithName("Dispatch")

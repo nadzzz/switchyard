@@ -87,7 +87,7 @@ public static class DispatchEndpoints
                 var audioBytes = ms.ToArray();
 
                 using var content = new ByteArrayContent(audioBytes);
-                content.Headers.ContentType = new MediaTypeHeaderValue(
+                content.Headers.ContentType = MediaTypeHeaderValue.Parse(
                     audioFile.ContentType ?? "audio/webm");
 
                 using var msg = new HttpRequestMessage(HttpMethod.Post, "/dispatch")

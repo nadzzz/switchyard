@@ -126,8 +126,8 @@ var switchyardCsharp = builder.AddProject<Projects.Switchyard>("switchyard-cshar
         {
             context.Urls.Add(new ResourceUrlAnnotation
             {
-                Url = $"{httpUrl.Url}/openapi/v1.json",
-                DisplayText = "OpenAPI"
+                Url = $"{httpUrl.Url}/scalar/v1",
+                DisplayText = "Scalar UI"
             });
         }
     })
