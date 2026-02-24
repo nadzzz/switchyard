@@ -71,21 +71,23 @@ public sealed class OpenAIInterpreter : IInterpreter
     {
         var systemPrompt = InterpreterHelpers.BuildSystemPrompt(instruction);
 
-        var body = new
+        var body = new OpenAIChatRequest
         {
-            model = _completionModel,
-            messages = new object[]
-            {
-                new { role = "system", content = systemPrompt },
-                new { role = "user", content = text }
-            },
-            response_format = new { type = "json_object" },
-            temperature = 0.2
+            Model = _completionModel,
+            Messages =
+            [
+                new ChatMessage { Role = "system", Content = systemPrompt },
+                new ChatMessage { Role = "user", Content = text }
+            ],
+            ResponseFormat = new ResponseFormatSpec { Type = "json_object" },
+            Temperature = 0.2
         };
 
         using var req = new HttpRequestMessage(HttpMethod.Post, ChatUrl)
         {
-            Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json")
+            Content = new StringContent(
+                JsonSerializer.Serialize(body, SwitchyardJsonContext.Default.OpenAIChatRequest),
+                Encoding.UTF8, "application/json")
         };
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
 

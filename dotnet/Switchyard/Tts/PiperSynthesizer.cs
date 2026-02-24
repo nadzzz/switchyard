@@ -70,8 +70,11 @@ public sealed class PiperSynthesizer : ISynthesizer
         var port = parts.Length > 1 && int.TryParse(parts[1], out var p) ? p : 10200;
 
         using var tcp = new TcpClient();
+        tcp.NoDelay = true;
         await tcp.ConnectAsync(host, port, ct);
-        await using var stream = tcp.GetStream();
+        await using var rawStream = tcp.GetStream();
+        // Wrap in BufferedStream to avoid per-byte syscalls in ReadLineAsync.
+        await using var stream = new BufferedStream(rawStream, 8192);
 
         // Send synthesize event
         var synthEvent = new WyomingEvent
@@ -152,7 +155,7 @@ public sealed class PiperSynthesizer : ISynthesizer
         }
     }
 
-    private static async Task WriteEventAsync(NetworkStream stream, WyomingEvent evt, CancellationToken ct)
+    private static async Task WriteEventAsync(Stream stream, WyomingEvent evt, CancellationToken ct)
     {
         var jsonBytes = JsonSerializer.SerializeToUtf8Bytes(new { type = evt.Type, data = evt.Data });
         var header = $"{jsonBytes.Length} 0\n";
@@ -164,7 +167,7 @@ public sealed class PiperSynthesizer : ISynthesizer
         await stream.FlushAsync(ct);
     }
 
-    private static async Task<(WyomingEvent Event, byte[] Payload)> ReadEventAsync(NetworkStream stream, CancellationToken ct)
+    private static async Task<(WyomingEvent Event, byte[] Payload)> ReadEventAsync(Stream stream, CancellationToken ct)
     {
         // Read header line
         var headerLine = await ReadLineAsync(stream, ct);
@@ -205,7 +208,7 @@ public sealed class PiperSynthesizer : ISynthesizer
         return (evt, payload);
     }
 
-    private static async Task<string> ReadLineAsync(NetworkStream stream, CancellationToken ct)
+    private static async Task<string> ReadLineAsync(Stream stream, CancellationToken ct)
     {
         var sb = new StringBuilder();
         var buf = new byte[1];
@@ -219,7 +222,7 @@ public sealed class PiperSynthesizer : ISynthesizer
         return sb.ToString();
     }
 
-    private static async Task ReadExactAsync(NetworkStream stream, byte[] buffer, CancellationToken ct)
+    private static async Task ReadExactAsync(Stream stream, byte[] buffer, CancellationToken ct)
     {
         int offset = 0;
         while (offset < buffer.Length)

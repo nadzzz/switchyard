@@ -118,11 +118,12 @@ public sealed class Dispatcher(
             return result;
         }
 
-        // Step 4: Route commands to target services.
-        var payload = JsonSerializer.SerializeToUtf8Bytes(result, SwitchyardJsonContext.Default.DispatchResult);
-
+        // Step 4: Route commands to target services (in parallel).
         if (msg.Instruction.Targets is { Count: > 0 } targets)
         {
+            var payload = JsonSerializer.SerializeToUtf8Bytes(result, SwitchyardJsonContext.Default.DispatchResult);
+
+            var routeTasks = new List<Task<(string ServiceName, bool Ok)>>(targets.Count);
             foreach (var target in targets)
             {
                 if (!_transports.TryGetValue(target.Protocol, out var transport))
@@ -132,16 +133,14 @@ public sealed class Dispatcher(
                     continue;
                 }
 
-                try
-                {
-                    await transport.SendAsync(target, payload, ct);
-                    result.RoutedTo.Add(target.ServiceName);
-                    logger.LogInformation("Routed to target {Target}", target.ServiceName);
-                }
-                catch (Exception ex)
-                {
-                    logger.LogError(ex, "Failed to send to target {Target}", target.ServiceName);
-                }
+                routeTasks.Add(RouteToTargetAsync(transport, target, payload, ct));
+            }
+
+            var results = await Task.WhenAll(routeTasks);
+            foreach (var (serviceName, ok) in results)
+            {
+                if (ok)
+                    result.RoutedTo.Add(serviceName);
             }
         }
 
@@ -150,6 +149,22 @@ public sealed class Dispatcher(
             elapsed.TotalMilliseconds, result.RoutedTo.Count);
 
         return result;
+    }
+
+    private async Task<(string ServiceName, bool Ok)> RouteToTargetAsync(
+        ITransport transport, MessageTarget target, byte[] payload, CancellationToken ct)
+    {
+        try
+        {
+            await transport.SendAsync(target, payload, ct);
+            logger.LogInformation("Routed to target {Target}", target.ServiceName);
+            return (target.ServiceName, true);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to send to target {Target}", target.ServiceName);
+            return (target.ServiceName, false);
+        }
     }
 
     private ResponseMode ResolveResponseMode(ResponseMode mode) => mode switch

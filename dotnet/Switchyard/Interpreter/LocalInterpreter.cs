@@ -117,38 +117,40 @@ public sealed class LocalInterpreter : IInterpreter
     {
         var systemPrompt = InterpreterHelpers.BuildSystemPrompt(instruction);
 
-        object body;
+        string serializedBody;
         if (_llmEndpoint.EndsWith("/api/generate"))
         {
             // Ollama format
-            body = new
+            var body = new OllamaGenerateRequest
             {
-                model = _llmModel,
-                system = systemPrompt,
-                prompt = text,
-                stream = false,
-                format = "json"
+                Model = _llmModel,
+                System = systemPrompt,
+                Prompt = text,
+                Stream = false,
+                Format = "json"
             };
+            serializedBody = JsonSerializer.Serialize(body, SwitchyardJsonContext.Default.OllamaGenerateRequest);
         }
         else
         {
             // OpenAI-compatible chat completions
-            body = new
+            var body = new OpenAIChatRequest
             {
-                model = _llmModel,
-                messages = new object[]
-                {
-                    new { role = "system", content = systemPrompt },
-                    new { role = "user", content = text }
-                },
-                temperature = 0.2,
-                stream = false
+                Model = _llmModel,
+                Messages =
+                [
+                    new ChatMessage { Role = "system", Content = systemPrompt },
+                    new ChatMessage { Role = "user", Content = text }
+                ],
+                Temperature = 0.2,
+                Stream = false
             };
+            serializedBody = JsonSerializer.Serialize(body, SwitchyardJsonContext.Default.OpenAIChatRequest);
         }
 
         using var req = new HttpRequestMessage(HttpMethod.Post, _llmEndpoint)
         {
-            Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json")
+            Content = new StringContent(serializedBody, Encoding.UTF8, "application/json")
         };
 
         var resp = await _client.SendAsync(req, ct);

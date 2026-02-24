@@ -2,6 +2,7 @@
 // Port of the Go switchyard daemon to ASP.NET Core.
 // Interprets audio/text inputs and routes structured commands to target services.
 
+using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.Extensions.Options;
 using Scalar.AspNetCore;
 using Switchyard.Config;
@@ -11,6 +12,16 @@ using Switchyard.Health;
 using Switchyard.Models;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// ---------------------------------------------------------------------------
+// Kestrel performance tuning.
+// ---------------------------------------------------------------------------
+builder.WebHost.ConfigureKestrel(kestrel =>
+{
+    kestrel.AddServerHeader = false;
+    kestrel.Limits.KeepAliveTimeout = TimeSpan.FromSeconds(120);
+    kestrel.Limits.RequestHeadersTimeout = TimeSpan.FromSeconds(30);
+});
 
 // ---------------------------------------------------------------------------
 // Configuration — Options pattern with validation.
@@ -34,6 +45,17 @@ builder.Services.ConfigureHttpJsonOptions(opts =>
 
 // Problem Details for consistent error responses.
 builder.Services.AddProblemDetails();
+
+// Response compression — reduces payload size for JSON & base64-encoded audio.
+builder.Services.AddResponseCompression(opts =>
+{
+    opts.EnableForHttps = true;
+    opts.MimeTypes = ResponseCompressionDefaults.MimeTypes
+        .Concat(["application/json"]);
+});
+
+// Output caching to allow short-lived caching of health endpoints.
+builder.Services.AddOutputCache();
 
 // ---------------------------------------------------------------------------
 // Logging
@@ -67,6 +89,7 @@ var cfg = app.Services.GetRequiredService<IOptions<SwitchyardOptions>>().Value;
 
 app.UseExceptionHandler();
 app.UseStatusCodePages();
+app.UseResponseCompression();
 
 // OpenAPI + Scalar UI + Swagger UI.
 app.MapOpenApi();

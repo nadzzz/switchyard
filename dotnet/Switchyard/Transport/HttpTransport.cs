@@ -7,14 +7,16 @@ namespace Switchyard.Transport;
 public sealed class HttpTransport : ITransport
 {
     private readonly int _port;
+    private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<HttpTransport> _logger;
     private WebApplication? _app;
 
     public string Name => "http";
 
-    public HttpTransport(int port, ILogger<HttpTransport> logger)
+    public HttpTransport(int port, IHttpClientFactory httpClientFactory, ILogger<HttpTransport> logger)
     {
         _port = port;
+        _httpClientFactory = httpClientFactory;
         _logger = logger;
     }
 
@@ -62,7 +64,7 @@ public sealed class HttpTransport : ITransport
 
     public async Task SendAsync(MessageTarget target, byte[] payload, CancellationToken ct)
     {
-        using var client = new HttpClient();
+        using var client = _httpClientFactory.CreateClient("HttpTransport");
         var content = new ByteArrayContent(payload);
         content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
 

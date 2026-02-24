@@ -183,4 +183,74 @@ public sealed class DispatchResult
 [JsonSerializable(typeof(Command))]
 [JsonSerializable(typeof(MessageTarget))]
 [JsonSerializable(typeof(JsonElement))]
+[JsonSerializable(typeof(OpenAIChatRequest))]
+[JsonSerializable(typeof(OpenAITranscriptionForm))]
+[JsonSerializable(typeof(OllamaGenerateRequest))]
 public sealed partial class SwitchyardJsonContext : JsonSerializerContext;
+
+// --- Interpreter request DTOs for source-generated serialization ---
+
+/// <summary>OpenAI Chat Completions API request body.</summary>
+public sealed class OpenAIChatRequest
+{
+    [JsonPropertyName("model")]
+    public string Model { get; set; } = string.Empty;
+
+    [JsonPropertyName("messages")]
+    public List<ChatMessage> Messages { get; set; } = [];
+
+    [JsonPropertyName("response_format")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ResponseFormatSpec? ResponseFormat { get; set; }
+
+    [JsonPropertyName("temperature")]
+    public double Temperature { get; set; } = 0.2;
+
+    [JsonPropertyName("stream")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Stream { get; set; }
+}
+
+public sealed class ChatMessage
+{
+    [JsonPropertyName("role")]
+    public string Role { get; set; } = string.Empty;
+
+    [JsonPropertyName("content")]
+    public string Content { get; set; } = string.Empty;
+}
+
+public sealed class ResponseFormatSpec
+{
+    [JsonPropertyName("type")]
+    public string Type { get; set; } = "json_object";
+}
+
+/// <summary>Ollama /api/generate request body.</summary>
+public sealed class OllamaGenerateRequest
+{
+    [JsonPropertyName("model")]
+    public string Model { get; set; } = string.Empty;
+
+    [JsonPropertyName("system")]
+    public string System { get; set; } = string.Empty;
+
+    [JsonPropertyName("prompt")]
+    public string Prompt { get; set; } = string.Empty;
+
+    [JsonPropertyName("stream")]
+    public bool Stream { get; set; }
+
+    [JsonPropertyName("format")]
+    public string Format { get; set; } = "json";
+}
+
+/// <summary>Placeholder to register the type — actual form data is built via MultipartFormDataContent.</summary>
+public sealed class OpenAITranscriptionForm
+{
+    [JsonPropertyName("model")]
+    public string Model { get; set; } = string.Empty;
+
+    [JsonPropertyName("response_format")]
+    public string ResponseFormat { get; set; } = "verbose_json";
+}

@@ -97,6 +97,17 @@ public static class ServiceCollectionExtensions
     /// <summary>Registers message transports (gRPC, MQTT).</summary>
     public static IServiceCollection AddSwitchyardTransports(this IServiceCollection services)
     {
+        // Named HttpClient for the HTTP transport outbound calls.
+        services.AddHttpClient("HttpTransport");
+
+        services.AddKeyedSingleton<ITransport>("http", (sp, _) =>
+        {
+            var opts = sp.GetRequiredService<IOptions<SwitchyardOptions>>().Value;
+            return new HttpTransport(opts.Transports.Http.Port,
+                sp.GetRequiredService<IHttpClientFactory>(),
+                sp.GetRequiredService<ILogger<HttpTransport>>());
+        });
+
         services.AddKeyedSingleton<ITransport>("grpc", (sp, _) =>
         {
             var opts = sp.GetRequiredService<IOptions<SwitchyardOptions>>().Value;
@@ -125,6 +136,8 @@ public static class ServiceCollectionExtensions
             var logger = sp.GetRequiredService<ILogger<Dispatcher>>();
 
             var transports = new List<ITransport>();
+            if (opts.Transports.Http.Enabled)
+                transports.Add(sp.GetRequiredKeyedService<ITransport>("http"));
             if (opts.Transports.Grpc.Enabled)
                 transports.Add(sp.GetRequiredKeyedService<ITransport>("grpc"));
             if (opts.Transports.Mqtt.Enabled)

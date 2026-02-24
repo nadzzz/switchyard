@@ -38,8 +38,11 @@ public static class DispatchEndpoints
         }
         else
         {
-            // Raw audio body.
-            using var ms = new MemoryStream();
+            // Raw audio body — read with pre-allocated capacity when Content-Length is known.
+            var contentLength = ctx.Request.ContentLength;
+            using var ms = contentLength.HasValue
+                ? new MemoryStream((int)contentLength.Value)
+                : new MemoryStream();
             await ctx.Request.Body.CopyToAsync(ms, ct);
             msg.Audio = ms.ToArray();
             msg.ContentType = contentType;
